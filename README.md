@@ -1,4 +1,4 @@
-# Wealthion RAG Chatbot
+# Affinity RAG Chatbot
 
 A Retrieval-Augmented Generation (RAG) chatbot that ingests documents into Pinecone and answers questions using GPT-4o.
 
@@ -21,7 +21,7 @@ rag-chatbot/
 ## Prerequisites
 
 - Python 3.10+
-- A Pinecone account with an index named `wealthion-automation` (1536 dimensions, cosine metric)
+- A Pinecone account with an index named `-automation` (1536 dimensions, cosine metric)
 - OpenAI API key
 
 ## Setup
