@@ -1,10 +1,10 @@
 import json
 import anthropic
-from sentence_transformers import SentenceTransformer
+from fastembed import TextEmbedding
 from pinecone import Pinecone
 from config import ANTHROPIC_API_KEY, PINECONE_API_KEY, PINECONE_INDEX, EMBEDDING_MODEL, CHAT_MODEL
 
-embedder = SentenceTransformer(EMBEDDING_MODEL)
+embedder = TextEmbedding(EMBEDDING_MODEL)
 anthropic_client = anthropic.Anthropic(api_key=ANTHROPIC_API_KEY)
 pc = Pinecone(api_key=PINECONE_API_KEY)
 index = pc.Index(PINECONE_INDEX)
@@ -20,7 +20,7 @@ MAX_HISTORY_TURNS = 6
 
 
 def embed_query(text: str) -> list[float]:
-    return embedder.encode([text])[0].tolist()
+    return next(iter(embedder.embed([text]))).tolist()
 
 
 def query_pinecone(embedding: list[float], top_k: int = 5) -> list[dict]:

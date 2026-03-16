@@ -8,9 +8,9 @@ PINECONE_API_KEY = os.getenv("PINECONE_API_KEY")
 PINECONE_INDEX = os.getenv("PINECONE_INDEX", "rag-affinity")
 PINECONE_REGION = os.getenv("PINECONE_REGION", "us-east-1")
 
-EMBEDDING_MODEL = "all-mpnet-base-v2"  # local, no API key needed
+EMBEDDING_MODEL = "BAAI/bge-small-en-v1.5"  # fastembed, no PyTorch needed
 CHAT_MODEL = "claude-opus-4-6"
-EMBEDDING_DIMENSIONS = 768
+EMBEDDING_DIMENSIONS = 384
 
 def validate_config():
     missing = []

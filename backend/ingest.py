@@ -1,11 +1,11 @@
 import uuid
 import fitz  # PyMuPDF
-from sentence_transformers import SentenceTransformer
+from fastembed import TextEmbedding
 from pinecone import Pinecone
 from langchain_text_splitters import RecursiveCharacterTextSplitter
 from config import PINECONE_API_KEY, PINECONE_INDEX, EMBEDDING_MODEL
 
-embedder = SentenceTransformer(EMBEDDING_MODEL)
+embedder = TextEmbedding(EMBEDDING_MODEL)
 pc = Pinecone(api_key=PINECONE_API_KEY)
 index = pc.Index(PINECONE_INDEX)
 
@@ -30,7 +30,7 @@ def extract_text_from_txt(file_bytes: bytes) -> str:
 
 
 def embed_batch(texts: list[str]) -> list[list[float]]:
-    return embedder.encode(texts, show_progress_bar=False).tolist()
+    return [v.tolist() for v in embedder.embed(texts)]
 
 
 def ingest_document(file_bytes: bytes, filename: str, content_type: str) -> dict:

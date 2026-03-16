@@ -2,7 +2,7 @@ fastapi
 uvicorn[standard]
 anthropic
 pinecone
-sentence-transformers
+fastembed
 langchain-text-splitters
 pymupdf
 python-multipart
