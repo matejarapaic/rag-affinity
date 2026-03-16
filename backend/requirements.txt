@@ -1,0 +1,10 @@
+fastapi
+uvicorn[standard]
+anthropic
+pinecone
+sentence-transformers
+langchain-text-splitters
+pymupdf
+python-multipart
+python-dotenv
+httpx
