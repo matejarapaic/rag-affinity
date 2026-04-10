@@ -5,12 +5,11 @@ load_dotenv()
 
 ANTHROPIC_API_KEY = os.getenv("ANTHROPIC_API_KEY")
 PINECONE_API_KEY = os.getenv("PINECONE_API_KEY")
-PINECONE_INDEX = os.getenv("PINECONE_INDEX", "rag-affinity")
+PINECONE_INDEX = os.getenv("PINECONE_INDEX", "rag-affinity-v2")
 PINECONE_REGION = os.getenv("PINECONE_REGION", "us-east-1")
+PINECONE_NAMESPACE = "__default__"
 
-EMBEDDING_MODEL = "BAAI/bge-small-en-v1.5"  # fastembed, no PyTorch needed
 CHAT_MODEL = "claude-opus-4-6"
-EMBEDDING_DIMENSIONS = 384
 
 def validate_config():
     missing = []

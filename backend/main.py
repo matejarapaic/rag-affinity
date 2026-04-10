@@ -7,6 +7,7 @@ import uvicorn
 from config import validate_config
 from ingest import ingest_document
 from retrieval import chat, chat_stream
+from graph import get_stats, extract_entities, graph_search
 
 validate_config()
 
@@ -31,6 +32,9 @@ class ChatRequest(BaseModel):
     message: str
     history: list[Message] = []
     stream: bool = False
+
+class GraphDebugRequest(BaseModel):
+    query: str
 
 
 # ── Endpoints ────────────────────────────────────────────────────────────────
@@ -76,6 +80,43 @@ async def chat_endpoint(req: ChatRequest):
         raise HTTPException(status_code=422, detail=str(e))
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Unexpected error: {e}")
+
+
+# ── Graph inspection endpoints ────────────────────────────────────────────────
+
+@app.get("/graph/stats")
+def graph_stats():
+    """
+    Returns the current state of the knowledge graph.
+    Use this to verify that documents were indexed into the graph after upload.
+    Example: GET /graph/stats
+    """
+    return get_stats()
+
+
+@app.post("/graph/debug")
+def graph_debug(req: GraphDebugRequest):
+    """
+    Shows exactly what the graph layer does for a given query:
+    - which entities were extracted from the query
+    - which chunks the graph traversal found (before merging with vector search)
+    Example: POST /graph/debug  {"query": "What did Apple do in Q3?"}
+    """
+    entities = extract_entities(req.query)
+    matches = graph_search(req.query, top_k=5)
+    return {
+        "query": req.query,
+        "entities_extracted": [{"text": t, "type": et} for t, et in entities],
+        "graph_matches": [
+            {
+                "chunk_id": m["id"],
+                "score": m["score"],
+                "author_name": m["metadata"]["author_name"],
+                "preview": m["metadata"]["text"][:200],
+            }
+            for m in matches
+        ],
+    }
 
 
 if __name__ == "__main__":

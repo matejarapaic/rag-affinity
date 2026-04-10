@@ -1,11 +1,13 @@
+import logging
 import uuid
 import fitz  # PyMuPDF
-from fastembed import TextEmbedding
 from pinecone import Pinecone
 from langchain_text_splitters import RecursiveCharacterTextSplitter
-from config import PINECONE_API_KEY, PINECONE_INDEX, EMBEDDING_MODEL
+from config import PINECONE_API_KEY, PINECONE_INDEX, PINECONE_NAMESPACE
+from graph import add_document_to_graph
 
-embedder = TextEmbedding(EMBEDDING_MODEL)
+logger = logging.getLogger(__name__)
+
 pc = Pinecone(api_key=PINECONE_API_KEY)
 index = pc.Index(PINECONE_INDEX)
 
@@ -29,10 +31,6 @@ def extract_text_from_txt(file_bytes: bytes) -> str:
         raise ValueError(f"Failed to read text file: {e}")
 
 
-def embed_batch(texts: list[str]) -> list[list[float]]:
-    return [v.tolist() for v in embedder.embed(texts)]
-
-
 def ingest_document(file_bytes: bytes, filename: str, content_type: str) -> dict:
     if content_type == "application/pdf" or filename.lower().endswith(".pdf"):
         text = extract_text_from_pdf(file_bytes)
@@ -49,24 +47,29 @@ def ingest_document(file_bytes: bytes, filename: str, content_type: str) -> dict
 
     doc_id = str(uuid.uuid4())
 
-    all_embeddings = []
-    batch_size = 100
-    for i in range(0, len(chunks), batch_size):
-        all_embeddings.extend(embed_batch(chunks[i : i + batch_size]))
-
-    vectors = [
+    records = [
         {
-            "id": f"{doc_id}_{i}",
-            "values": embedding,
-            "metadata": {"doc_id": doc_id, "author_name": author_name, "text": chunk},
+            "_id": f"{doc_id}_{i}",
+            "text": chunk,
+            "author_name": author_name,
+            "doc_id": doc_id,
         }
-        for i, (chunk, embedding) in enumerate(zip(chunks, all_embeddings))
+        for i, chunk in enumerate(chunks)
     ]
 
     try:
-        for i in range(0, len(vectors), 100):
-            index.upsert(vectors=vectors[i : i + 100])
+        batch_size = 96
+        for i in range(0, len(records), batch_size):
+            index.upsert_records(
+                namespace=PINECONE_NAMESPACE,
+                records=records[i: i + batch_size],
+            )
     except Exception as e:
         raise RuntimeError(f"Pinecone upsert error: {e}")
+
+    try:
+        add_document_to_graph(doc_id, chunks, author_name)
+    except Exception as e:
+        logger.warning("Graph build failed for doc %s: %s", doc_id, e)
 
     return {"doc_id": doc_id, "chunks_uploaded": len(chunks)}

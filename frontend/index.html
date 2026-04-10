@@ -225,6 +225,9 @@
 
     .source-tag:hover { border-color: var(--accent); color: var(--accent); }
 
+    .source-tag.graph { border-color: #7c3aed44; color: #a78bfa; }
+    .source-tag.graph:hover { border-color: #7c3aed; color: #c4b5fd; }
+
     /* Tooltip for chunk preview */
     .source-tag::after {
       content: attr(data-preview);
@@ -382,7 +385,7 @@
 
 <script>
 // ── Config ──────────────────────────────────────────────────────────────────
-const API_BASE = "https://glorious-vision-production-5d71.up.railway.app";
+const API_BASE = "http://localhost:8000";
 
 // ── State ───────────────────────────────────────────────────────────────────
 let history = [];   // { role: "user"|"assistant", content: string }[]
@@ -446,8 +449,9 @@ function createBubble(role, html, sources = []) {
     sourcesEl.className = "sources";
     sources.forEach(s => {
       const tag = document.createElement("span");
-      tag.className = "source-tag";
-      tag.textContent = `📄 ${s.author_name}`;
+      const isGraph = s.source === "graph";
+      tag.className = `source-tag${isGraph ? " graph" : ""}`;
+      tag.textContent = `${isGraph ? "🕸" : "📄"} ${s.author_name}`;
       tag.setAttribute("data-preview", s.chunk_preview || "");
       tag.title = s.doc_id;
       sourcesEl.appendChild(tag);
