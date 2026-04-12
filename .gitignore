@@ -1,10 +1,15 @@
 .env
 
 .venv
+venv/
 
-__pycache__
-
-
+__pycache__/
 *.pyc
 
 .DS_Store
+
+*.pkl
+
+gdrive-sync/service_account.json
+gdrive-sync/processed_files.json
+
