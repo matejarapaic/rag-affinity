@@ -1,0 +1,157 @@
+name: Build & Release
+
+on:
+  push:
+    branches: [main]
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    name: Build (${{ matrix.platform }})
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: macos-14
+            platform: mac
+            npm_cmd: dist:mac
+            qdrant_url: https://github.com/qdrant/qdrant/releases/download/v1.17.1/qdrant-aarch64-apple-darwin.tar.gz
+            qdrant_bin: qdrant
+
+          - os: ubuntu-22.04
+            platform: linux
+            npm_cmd: dist:linux
+            qdrant_url: https://github.com/qdrant/qdrant/releases/download/v1.17.1/qdrant-x86_64-unknown-linux-musl.tar.gz
+            qdrant_bin: qdrant
+
+          - os: windows-2022
+            platform: win
+            npm_cmd: dist:win
+            qdrant_url: https://github.com/qdrant/qdrant/releases/download/v1.17.1/qdrant-x86_64-pc-windows-msvc.zip
+            qdrant_bin: qdrant.exe
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Python 3.11
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Set up Node.js 20
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      # ── Credentials from GitHub Secrets ─────────────────────────────────────
+      - name: Write .env
+        shell: bash
+        env:
+          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+          GDRIVE_FOLDER_ID: ${{ secrets.GDRIVE_FOLDER_ID }}
+        run: |
+          printf 'ANTHROPIC_API_KEY=%s\nGDRIVE_FOLDER_ID=%s\n' \
+            "$ANTHROPIC_API_KEY" "$GDRIVE_FOLDER_ID" > backend/.env
+
+      - name: Write service_account.json
+        shell: bash
+        env:
+          SERVICE_ACCOUNT_JSON: ${{ secrets.GOOGLE_SERVICE_ACCOUNT_JSON }}
+        run: echo "$SERVICE_ACCOUNT_JSON" > backend/service_account.json
+
+      # ── Python dependencies ──────────────────────────────────────────────────
+      - name: Install Python dependencies
+        shell: bash
+        run: pip install --no-cache-dir -r backend/requirements.txt pyinstaller
+
+      # ── Qdrant binary for this platform ─────────────────────────────────────
+      - name: Download Qdrant (Mac / Linux)
+        if: matrix.platform != 'win'
+        shell: bash
+        run: |
+          mkdir -p electron-app/resources/qdrant
+          curl -fsSL "${{ matrix.qdrant_url }}" \
+            | tar -xz -C electron-app/resources/qdrant
+          chmod +x electron-app/resources/qdrant/${{ matrix.qdrant_bin }}
+
+      - name: Download Qdrant (Windows)
+        if: matrix.platform == 'win'
+        shell: pwsh
+        run: |
+          New-Item -ItemType Directory -Force -Path electron-app/resources/qdrant | Out-Null
+          Invoke-WebRequest -Uri "${{ matrix.qdrant_url }}" -OutFile qdrant.zip
+          Expand-Archive -Path qdrant.zip -DestinationPath electron-app/resources/qdrant -Force
+
+      # ── Build Python backend with PyInstaller ────────────────────────────────
+      - name: Build backend (Mac / Linux)
+        if: matrix.platform != 'win'
+        shell: bash
+        run: bash electron-app/build-backend.sh
+
+      - name: Build backend (Windows)
+        if: matrix.platform == 'win'
+        shell: bash
+        run: bash electron-app/build-backend.sh
+
+      # ── Build Electron app ───────────────────────────────────────────────────
+      - name: Install npm dependencies
+        working-directory: electron-app
+        run: npm ci
+
+      - name: Build Electron app
+        working-directory: electron-app
+        run: npm run ${{ matrix.npm_cmd }}
+
+      # ── Upload build artifacts ───────────────────────────────────────────────
+      - name: Upload artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: ${{ matrix.platform }}-build
+          path: |
+            electron-app/dist/*.dmg
+            electron-app/dist/*.AppImage
+            electron-app/dist/*.exe
+          if-no-files-found: warn
+
+  # ── Create GitHub Release with all platform builds ──────────────────────────
+  release:
+    name: Publish Release
+    needs: build
+    runs-on: ubuntu-latest
+    steps:
+      - name: Download all artifacts
+        uses: actions/download-artifact@v4
+        with:
+          path: artifacts
+          merge-multiple: true
+
+      - name: List artifacts
+        run: find artifacts -type f
+
+      - name: Create / update Release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: latest
+          name: "Affinity RAG — Latest Build"
+          body: |
+            **Affinity RAG** — automated build from `main`
+
+            | Platform | File |
+            |---|---|
+            | 🍎 macOS (Apple Silicon) | `Affinity RAG-*-arm64.dmg` |
+            | 🐧 Linux | `Affinity RAG-*.AppImage` |
+            | 🪟 Windows | `Affinity RAG-*.exe` |
+
+            **Install instructions:**
+            - **Mac**: Open the `.dmg`, drag to Applications
+            - **Linux**: `chmod +x *.AppImage` then double-click
+            - **Windows**: Run the `.exe` installer
+
+            Built from commit: ${{ github.sha }}
+          files: artifacts/*
+          make_latest: true
+          prerelease: false
