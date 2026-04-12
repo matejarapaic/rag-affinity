@@ -1,17 +1,32 @@
 import logging
 import uuid
+import hashlib
 import fitz  # PyMuPDF
-from pinecone import Pinecone
+from fastembed import TextEmbedding
+from qdrant_client import QdrantClient
+from qdrant_client.models import Distance, VectorParams, PointStruct
 from langchain_text_splitters import RecursiveCharacterTextSplitter
-from config import PINECONE_API_KEY, PINECONE_INDEX, PINECONE_NAMESPACE
 from graph import add_document_to_graph
 
 logger = logging.getLogger(__name__)
 
-pc = Pinecone(api_key=PINECONE_API_KEY)
-index = pc.Index(PINECONE_INDEX)
+QDRANT_URL = "http://localhost:6333"
+COLLECTION_NAME = "affinity_rag"
+EMBED_MODEL = "BAAI/bge-small-en-v1.5"
+
+_embedder = TextEmbedding(model_name=EMBED_MODEL)
+_qdrant = QdrantClient(url=QDRANT_URL)
 
 splitter = RecursiveCharacterTextSplitter(chunk_size=500, chunk_overlap=50)
+
+
+def _ensure_collection(vector_size: int):
+    existing = [c.name for c in _qdrant.get_collections().collections]
+    if COLLECTION_NAME not in existing:
+        _qdrant.create_collection(
+            collection_name=COLLECTION_NAME,
+            vectors_config=VectorParams(size=vector_size, distance=Distance.COSINE),
+        )
 
 
 def extract_text_from_pdf(file_bytes: bytes) -> str:
@@ -46,26 +61,32 @@ def ingest_document(file_bytes: bytes, filename: str, content_type: str) -> dict
         raise ValueError("No chunks produced from document.")
 
     doc_id = str(uuid.uuid4())
+    chunk_id_base = int(hashlib.md5(doc_id.encode()).hexdigest(), 16) % (10**12)
 
-    records = [
-        {
-            "_id": f"{doc_id}_{i}",
-            "text": chunk,
-            "author_name": author_name,
-            "doc_id": doc_id,
-        }
-        for i, chunk in enumerate(chunks)
+    embeddings = list(_embedder.embed(chunks))
+    _ensure_collection(len(embeddings[0]))
+
+    points = [
+        PointStruct(
+            id=chunk_id_base + i,
+            vector=emb.tolist(),
+            payload={
+                "chunk_id": chunk_id_base + i,
+                "doc_id": doc_id,
+                "author_name": author_name,
+                "matter_id": "",
+                "doc_type": "upload",
+                "text": chunk,
+                "source": "upload",
+            },
+        )
+        for i, (chunk, emb) in enumerate(zip(chunks, embeddings))
     ]
 
     try:
-        batch_size = 96
-        for i in range(0, len(records), batch_size):
-            index.upsert_records(
-                namespace=PINECONE_NAMESPACE,
-                records=records[i: i + batch_size],
-            )
+        _qdrant.upsert(collection_name=COLLECTION_NAME, points=points)
     except Exception as e:
-        raise RuntimeError(f"Pinecone upsert error: {e}")
+        raise RuntimeError(f"Qdrant upsert error: {e}")
 
     try:
         add_document_to_graph(doc_id, chunks, author_name)
