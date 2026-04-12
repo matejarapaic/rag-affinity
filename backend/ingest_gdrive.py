@@ -37,8 +37,21 @@ from qdrant_client.models import (
 # Configuration — override via environment variables or edit directly
 # ---------------------------------------------------------------------------
 
+import sys as _sys
+
+def _resolve_service_account():
+    """Find service_account.json whether running normally or frozen by PyInstaller."""
+    env_val = os.getenv("GOOGLE_SERVICE_ACCOUNT_JSON")
+    if env_val:
+        return env_val
+    # When frozen, data files land in sys._MEIPASS
+    if getattr(_sys, 'frozen', False):
+        return os.path.join(_sys._MEIPASS, "service_account.json")
+    # Dev: same directory as this file
+    return os.path.join(os.path.dirname(os.path.abspath(__file__)), "service_account.json")
+
 GDRIVE_FOLDER_ID   = os.getenv("GDRIVE_FOLDER_ID", "1-lekJE_VDOpnp13OUXtCXZc4Nx71xGFb")
-SERVICE_ACCOUNT_FILE = os.getenv("GOOGLE_SERVICE_ACCOUNT_JSON", "service_account.json")
+SERVICE_ACCOUNT_FILE = _resolve_service_account()
 
 QDRANT_URL         = os.getenv("QDRANT_URL", "http://localhost:6333")
 QDRANT_API_KEY     = os.getenv("QDRANT_API_KEY", "")           # leave blank if local

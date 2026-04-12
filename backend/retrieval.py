@@ -12,6 +12,23 @@ anthropic_client = anthropic.Anthropic(api_key=ANTHROPIC_API_KEY)
 _embedder = TextEmbedding(model_name="BAAI/bge-small-en-v1.5")
 _qdrant = QdrantClient(url="http://localhost:6333")
 QDRANT_COLLECTION = "affinity_rag"
+VECTOR_SIZE = 384  # BAAI/bge-small-en-v1.5
+
+# Ensure the collection exists so queries never fail with "collection not found"
+def _ensure_collection():
+    try:
+        from qdrant_client.models import Distance, VectorParams
+        existing = [c.name for c in _qdrant.get_collections().collections]
+        if QDRANT_COLLECTION not in existing:
+            _qdrant.create_collection(
+                collection_name=QDRANT_COLLECTION,
+                vectors_config=VectorParams(size=VECTOR_SIZE, distance=Distance.COSINE),
+            )
+    except Exception as e:
+        import logging
+        logging.getLogger(__name__).warning("Could not ensure Qdrant collection: %s", e)
+
+_ensure_collection()
 
 SYSTEM_PROMPT = (
     "You are a knowledgeable assistant for Affinity. "
@@ -125,7 +142,9 @@ def query_qdrant(query_text: str, top_k: int = 5) -> list[dict]:
 
         return merged[:top_k * 2] if name_matches else vector_matches
     except Exception as e:
-        raise RuntimeError(f"Qdrant query error: {e}")
+        import logging
+        logging.getLogger(__name__).warning("Qdrant query error (returning empty): %s", e)
+        return []
 
 
 def hybrid_retrieve(query_text: str, top_k: int = 5) -> list[dict]:
@@ -191,6 +210,9 @@ def _build_sources(matches: list[dict]) -> list[dict]:
     ]
 
 
+THINKING_BUDGET = 8000   # tokens Claude can spend reasoning
+MAX_TOKENS      = 12000  # must be > THINKING_BUDGET
+
 def chat(user_message: str, history: list[dict]) -> dict:
     matches = hybrid_retrieve(user_message)
     system_content, messages = build_anthropic_messages(user_message, matches, history)
@@ -198,11 +220,15 @@ def chat(user_message: str, history: list[dict]) -> dict:
     try:
         response = anthropic_client.messages.create(
             model=CHAT_MODEL,
-            max_tokens=1024,
+            max_tokens=MAX_TOKENS,
+            thinking={"type": "enabled", "budget_tokens": THINKING_BUDGET},
             system=system_content,
             messages=messages,
         )
-        response_text = response.content[0].text
+        # Extract the text block (thinking blocks are separate content blocks)
+        response_text = next(
+            (b.text for b in response.content if b.type == "text"), ""
+        )
     except Exception as e:
         raise RuntimeError(f"Claude chat error: {e}")
 
@@ -211,16 +237,23 @@ def chat(user_message: str, history: list[dict]) -> dict:
 
 def chat_stream(user_message: str, history: list[dict]):
     """Generator that yields SSE-formatted chunks, then a final sources event."""
-    matches = hybrid_retrieve(user_message)
+    try:
+        matches = hybrid_retrieve(user_message)
+    except Exception as e:
+        yield f"data: [ERROR] Retrieval error: {e}\n\n"
+        return
+
     system_content, messages = build_anthropic_messages(user_message, matches, history)
 
     try:
         with anthropic_client.messages.stream(
             model=CHAT_MODEL,
-            max_tokens=1024,
+            max_tokens=MAX_TOKENS,
+            thinking={"type": "enabled", "budget_tokens": THINKING_BUDGET},
             system=system_content,
             messages=messages,
         ) as stream:
+            # text_stream automatically skips thinking blocks — only final answer text comes through
             for text in stream.text_stream:
                 yield f"data: {text.replace(chr(10), chr(92) + 'n')}\n\n"
     except Exception as e:
