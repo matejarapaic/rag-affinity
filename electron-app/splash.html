@@ -1,0 +1,93 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Affinity AI — Loading</title>
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    html, body {
+      width: 100%;
+      height: 100%;
+      background: #121212;
+      color: #F5F5F5;
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      user-select: none;
+      overflow: hidden;
+    }
+
+    .container {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 24px;
+    }
+
+    .logo {
+      width: 80px;
+      height: 80px;
+      object-fit: contain;
+      border-radius: 16px;
+    }
+
+    .logo-fallback {
+      width: 80px;
+      height: 80px;
+      background: #1a1a1a;
+      border: 2px solid #C6A75E;
+      border-radius: 16px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 32px;
+      color: #C6A75E;
+      font-weight: 700;
+    }
+
+    h1 {
+      font-size: 22px;
+      font-weight: 600;
+      color: #C6A75E;
+      letter-spacing: 0.04em;
+    }
+
+    #status {
+      font-size: 13px;
+      color: #8a8a8a;
+      min-height: 18px;
+    }
+
+    /* Spinner */
+    .spinner {
+      width: 36px;
+      height: 36px;
+      border: 3px solid #2E3A45;
+      border-top-color: #C6A75E;
+      border-radius: 50%;
+      animation: spin 0.9s linear infinite;
+    }
+
+    @keyframes spin {
+      to { transform: rotate(360deg); }
+    }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <img
+      class="logo"
+      src="../frontend/logo.png"
+      alt="Affinity AI"
+      onerror="this.style.display='none'; document.getElementById('logo-fallback').style.display='flex';"
+    />
+    <div class="logo-fallback" id="logo-fallback" style="display:none;">A</div>
+    <h1>Affinity AI</h1>
+    <div class="spinner"></div>
+    <p id="status">Starting Affinity AI&hellip;</p>
+  </div>
+</body>
+</html>

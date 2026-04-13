@@ -1,0 +1,71 @@
+{
+  "name": "affinity-rag",
+  "productName": "Affinity RAG",
+  "version": "1.0.0",
+  "description": "Affinity AI RAG Chatbot Desktop App",
+  "main": "main.js",
+  "scripts": {
+    "start": "electron .",
+    "dist": "electron-builder --mac --win --linux",
+    "dist:mac": "electron-builder --mac",
+    "dist:win": "electron-builder --win",
+    "dist:linux": "electron-builder --linux",
+    "build-backend": "bash build-backend.sh",
+    "_build_order_note": "Run build-backend.sh (or build-backend.bat on Windows) FIRST to bundle the Python backend with PyInstaller, THEN run npm run dist to package the Electron app."
+  },
+  "keywords": [],
+  "author": "Affinity AI",
+  "license": "MIT",
+  "devDependencies": {
+    "electron": "^31.0.0",
+    "electron-builder": "^25.0.0"
+  },
+  "build": {
+    "appId": "com.affinity.rag",
+    "productName": "Affinity RAG",
+    "asar": true,
+    "directories": {
+      "output": "dist"
+    },
+    "extraResources": [
+      {
+        "from": "resources/backend",
+        "to": "backend",
+        "filter": ["**/*"]
+      },
+      {
+        "from": "resources/qdrant",
+        "to": "qdrant",
+        "filter": ["**/*"]
+      },
+      {
+        "from": "../frontend",
+        "to": "frontend",
+        "filter": ["**/*"]
+      }
+    ],
+    "mac": {
+      "category": "public.app-category.productivity",
+      "icon": "build/icon.icns",
+      "target": [
+        { "target": "dmg", "arch": ["arm64"] },
+        { "target": "zip", "arch": ["arm64"] }
+      ]
+    },
+    "win": {
+      "target": [
+        { "target": "nsis", "arch": ["x64"] }
+      ]
+    },
+    "linux": {
+      "target": [
+        { "target": "AppImage", "arch": ["x64"] }
+      ],
+      "category": "Office"
+    },
+    "nsis": {
+      "oneClick": false,
+      "allowToChangeInstallationDirectory": true
+    }
+  }
+}

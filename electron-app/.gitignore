@@ -1,0 +1,5 @@
+node_modules/
+dist/
+resources/backend/
+resources/qdrant/
+build/*.png

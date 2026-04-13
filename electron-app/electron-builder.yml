@@ -1,0 +1,45 @@
+appId: com.affinity.ai
+productName: Affinity AI
+asar: true
+
+directories:
+  output: dist
+
+extraResources:
+  - from: resources/backend
+    to: backend
+    filter:
+      - "**/*"
+  - from: ../frontend
+    to: frontend
+    filter:
+      - "**/*"
+
+mac:
+  category: public.app-category.productivity
+  target:
+    - target: dmg
+      arch:
+        - universal
+    - target: zip
+      arch:
+        - universal
+
+win:
+  target:
+    - target: nsis
+      arch:
+        - x64
+
+linux:
+  category: Office
+  target:
+    - target: AppImage
+      arch:
+        - x64
+
+nsis:
+  oneClick: false
+  allowToChangeInstallationDirectory: true
+  createDesktopShortcut: true
+  createStartMenuShortcut: true
