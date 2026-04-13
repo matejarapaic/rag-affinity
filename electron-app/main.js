@@ -173,7 +173,7 @@ function killBackend() {
 
 // ── Health polling ───────────────────────────────────────────────────────────
 
-function waitForBackend(timeout = 30000, interval = 500) {
+function waitForBackend(timeout = 120000, interval = 500) {
   return new Promise((resolve, reject) => {
     const start = Date.now();
 
@@ -278,9 +278,9 @@ app.whenReady().then(async () => {
     await waitForQdrant(20000, 500);
 
     // 2. Then start the Python backend (which connects to Qdrant on startup)
-    setSplashStatus('Starting AI engine…');
+    setSplashStatus('Starting AI engine… (first launch may take 1–2 min)');
     startBackend();
-    await waitForBackend(30000, 500);
+    await waitForBackend(120000, 500);
 
     // 3. Open the main window
     setSplashStatus('Ready!');
