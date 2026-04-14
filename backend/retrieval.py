@@ -1,5 +1,6 @@
 import json
 from concurrent.futures import ThreadPoolExecutor
+from functools import lru_cache
 
 import anthropic
 from fastembed import TextEmbedding
@@ -8,7 +9,25 @@ from qdrant_client import QdrantClient
 from config import ANTHROPIC_API_KEY, CHAT_MODEL
 from graph import graph_search
 
-anthropic_client = anthropic.Anthropic(api_key=ANTHROPIC_API_KEY)
+
+@lru_cache(maxsize=64)
+def _get_client(api_key: str) -> anthropic.Anthropic:
+    """Return a cached Anthropic client for the given API key."""
+    return anthropic.Anthropic(api_key=api_key)
+
+
+def _resolve_client(api_key: str | None) -> anthropic.Anthropic:
+    """
+    Resolve the Anthropic client to use for a request.
+    Priority: caller-supplied key > system default (ANTHROPIC_API_KEY).
+    """
+    key = api_key or ANTHROPIC_API_KEY
+    if not key:
+        raise ValueError(
+            "No Anthropic API key available. "
+            "Please add your key in Settings → API Key."
+        )
+    return _get_client(key)
 _embedder = TextEmbedding(model_name="BAAI/bge-small-en-v1.5")
 _qdrant = QdrantClient(url="http://localhost:6333")
 QDRANT_COLLECTION = "affinity_rag"
@@ -213,12 +232,13 @@ def _build_sources(matches: list[dict]) -> list[dict]:
 THINKING_BUDGET = 8000   # tokens Claude can spend reasoning
 MAX_TOKENS      = 12000  # must be > THINKING_BUDGET
 
-def chat(user_message: str, history: list[dict]) -> dict:
+def chat(user_message: str, history: list[dict], api_key: str | None = None) -> dict:
+    client  = _resolve_client(api_key)
     matches = hybrid_retrieve(user_message)
     system_content, messages = build_anthropic_messages(user_message, matches, history)
 
     try:
-        response = anthropic_client.messages.create(
+        response = client.messages.create(
             model=CHAT_MODEL,
             max_tokens=MAX_TOKENS,
             thinking={"type": "enabled", "budget_tokens": THINKING_BUDGET},
@@ -235,10 +255,14 @@ def chat(user_message: str, history: list[dict]) -> dict:
     return {"response": response_text, "sources": _build_sources(matches)}
 
 
-def chat_stream(user_message: str, history: list[dict]):
+def chat_stream(user_message: str, history: list[dict], api_key: str | None = None):
     """Generator that yields SSE-formatted chunks, then a final sources event."""
     try:
+        client  = _resolve_client(api_key)
         matches = hybrid_retrieve(user_message)
+    except ValueError as e:
+        yield f"data: [ERROR] {e}\n\n"
+        return
     except Exception as e:
         yield f"data: [ERROR] Retrieval error: {e}\n\n"
         return
@@ -246,7 +270,7 @@ def chat_stream(user_message: str, history: list[dict]):
     system_content, messages = build_anthropic_messages(user_message, matches, history)
 
     try:
-        with anthropic_client.messages.stream(
+        with client.messages.stream(
             model=CHAT_MODEL,
             max_tokens=MAX_TOKENS,
             thinking={"type": "enabled", "budget_tokens": THINKING_BUDGET},
