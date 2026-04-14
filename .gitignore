@@ -1,15 +1,38 @@
+# Environment variables
 .env
+**/.env
 
+# Python
 .venv
 venv/
-
 __pycache__/
 *.pyc
+*.pyo
 
+# macOS
 .DS_Store
 
+# Model / data artifacts
 *.pkl
 
-gdrive-sync/service_account.json
+# Google credentials — never commit
+**/service_account.json
 gdrive-sync/processed_files.json
 
+# Per-user key store (written at runtime)
+backend/user_keys.json
+
+# Qdrant local storage
+backend/qdrant_storage/
+
+# Ingest state
+backend/.ingest_state.json
+
+# Build output
+build/
+dist/
+electron-app/resources/backend/
+*.spec.bak
+
+# Rag-chatbot (legacy) local data
+rag-chatbot/
