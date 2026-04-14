@@ -21,7 +21,7 @@ from datetime import datetime
 
 from google.oauth2 import service_account
 from googleapiclient.discovery import build
-from googleapiclient.http import MediaIoBaseDownload
+from googleapiclient.http import MediaIoBaseDownload, MediaIoBaseUpload
 import fitz  # PyMuPDF
 import docx  # python-docx
 import openpyxl
@@ -73,12 +73,88 @@ log = logging.getLogger(__name__)
 # ---------------------------------------------------------------------------
 
 def get_drive_service():
-    """Authenticate with Google Drive using a service account."""
+    """Authenticate with Google Drive using a service account (read-only)."""
     scopes = ["https://www.googleapis.com/auth/drive.readonly"]
     creds = service_account.Credentials.from_service_account_file(
         SERVICE_ACCOUNT_FILE, scopes=scopes
     )
     return build("drive", "v3", credentials=creds)
+
+
+def get_drive_service_write():
+    """Authenticate with Google Drive with full read/write access."""
+    scopes = ["https://www.googleapis.com/auth/drive"]
+    creds = service_account.Credentials.from_service_account_file(
+        SERVICE_ACCOUNT_FILE, scopes=scopes
+    )
+    return build("drive", "v3", credentials=creds)
+
+
+def upload_to_drive(file_bytes: bytes, filename: str, mime_type: str, folder_id: str = None) -> dict:
+    """Upload a file to Google Drive and return the file metadata dict."""
+    folder_id = folder_id or GDRIVE_FOLDER_ID
+    if not folder_id:
+        raise ValueError("GDRIVE_FOLDER_ID is not configured")
+
+    service = get_drive_service_write()
+    file_metadata = {
+        "name": filename,
+        "parents": [folder_id],
+    }
+    media = MediaIoBaseUpload(io.BytesIO(file_bytes), mimetype=mime_type, resumable=False)
+    uploaded = service.files().create(
+        body=file_metadata,
+        media_body=media,
+        fields="id, name, mimeType, modifiedTime, md5Checksum",
+    ).execute()
+    log.info(f"Uploaded '{filename}' to Drive (id={uploaded['id']})")
+    return uploaded
+
+
+def ingest_bytes(file_bytes: bytes, file_meta: dict):
+    """Ingest already-downloaded file bytes directly (skips re-download)."""
+    file_id   = file_meta["id"]
+    file_name = file_meta["name"]
+    mime_type = file_meta.get("mimeType", "")
+    checksum  = file_meta.get("md5Checksum") or file_meta.get("modifiedTime", "")
+
+    try:
+        text = extract_text(file_bytes, mime_type)
+    except Exception as e:
+        log.warning(f"  Failed to extract text from {file_name}: {e} — skipping")
+        return
+
+    if not text.strip():
+        log.warning(f"  No text extracted from {file_name} — skipping")
+        return
+
+    chunks = chunk_text(text)
+    log.info(f"  Split into {len(chunks)} chunks")
+
+    client   = get_qdrant_client()
+    embedder = TextEmbedding(model_name=EMBED_MODEL)
+
+    sample = list(embedder.embed(["test"]))[0]
+    ensure_collection(client, len(sample))
+    delete_file_chunks(client, file_id)
+
+    metadata = {
+        "file_id":       file_id,
+        "file_name":     file_name,
+        "modified_time": file_meta.get("modifiedTime", ""),
+        "checksum":      checksum,
+        "doc_id":        file_id,
+        "author_name":   "",
+        "matter_id":     "",
+        "doc_type":      "uploaded",
+        "source":        "upload",
+    }
+    upsert_chunks(client, embedder, chunks, metadata)
+
+    state = load_state()
+    state[file_id] = {"checksum": checksum, "name": file_name}
+    save_state(state)
+    log.info(f"  Ingested '{file_name}' directly from bytes")
 
 
 # MIME types we support and how to handle them
@@ -259,7 +335,7 @@ def upsert_chunks(client: QdrantClient, embedder, chunks: list[str], metadata: d
                         "chunk_id":    point_id,
                         "chunk_index": i + j,
                         "text": chunk,
-                        "source": "google_drive",
+                        "source": metadata.get("source", "google_drive"),
                         "ingested_at": datetime.utcnow().isoformat(),
                     },
                 )

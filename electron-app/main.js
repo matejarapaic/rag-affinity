@@ -29,12 +29,8 @@ function getQdrantPath() {
   return path.join(__dirname, 'resources', 'qdrant', exe);
 }
 
-function getFrontendPath() {
-  if (app.isPackaged) {
-    return path.join(process.resourcesPath, 'frontend', 'index.html');
-  }
-  return path.join(__dirname, '..', 'frontend', 'index.html');
-}
+// Frontend is now served by the FastAPI backend at http://localhost:8000
+// (required for Clerk auth — Clerk does not work on file:// origins)
 
 // ── Qdrant spawning ───────────────────────────────────────────────────────────
 
@@ -248,7 +244,7 @@ function createMainWindow() {
     },
   });
 
-  mainWindow.loadFile(getFrontendPath());
+  mainWindow.loadURL('http://localhost:8000');
 
   mainWindow.once('ready-to-show', () => {
     if (splashWindow && !splashWindow.isDestroyed()) {

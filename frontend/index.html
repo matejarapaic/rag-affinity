@@ -5,6 +5,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>Affinity RAG</title>
   <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
+  <!-- Clerk JS is injected dynamically by initClerk() with data-clerk-publishable-key -->
   <style>
     *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
 
@@ -68,6 +69,19 @@
     .topbar-name {
       font-weight: 700; font-size: 15px; color: var(--text);
     }
+
+    .topbar-settings-btn {
+      background: transparent;
+      border: 1px solid var(--border);
+      color: var(--muted);
+      width: 34px; height: 34px;
+      border-radius: var(--radius);
+      cursor: pointer;
+      display: flex; align-items: center; justify-content: center;
+      transition: border-color 0.15s, color 0.15s;
+      flex-shrink: 0;
+    }
+    .topbar-settings-btn:hover { border-color: var(--accent); color: var(--accent); }
 
     /* hero center */
     #landing-hero {
@@ -252,19 +266,17 @@
     }
     #new-chat-btn:hover { border-color: var(--accent); color: var(--accent); }
 
-    #upload-btn {
+    #chat-settings-btn {
       background: transparent;
       border: 1px solid var(--border);
-      color: var(--text);
-      padding: 6px 14px;
+      color: var(--muted);
+      width: 34px; height: 34px;
       border-radius: var(--radius);
       cursor: pointer;
-      font-size: 13px;
-      display: flex; align-items: center; gap: 6px;
-      transition: border-color 0.15s, background 0.15s;
+      display: flex; align-items: center; justify-content: center;
+      transition: border-color 0.15s, color 0.15s;
     }
-    #upload-btn:hover { border-color: var(--accent); background: #1e1e1e; color: var(--accent); }
-    #file-input { display: none; }
+    #chat-settings-btn:hover { border-color: var(--accent); color: var(--accent); }
 
     #upload-status {
       font-size: 12px; color: var(--muted);
@@ -350,18 +362,455 @@
     #send-btn { width: 42px; height: 42px; border-radius: var(--radius); border: none; background: var(--red); color: #fff; cursor: pointer; display: flex; align-items: center; justify-content: center; flex-shrink: 0; transition: background 0.15s; }
     #send-btn:hover:not(:disabled) { background: #b51e1e; }
     #send-btn:disabled { opacity: 0.4; cursor: not-allowed; }
+
+    /* ════════════════════════════════════════
+       SETTINGS VIEW
+    ════════════════════════════════════════ */
+    #settings-view {
+      display: none;
+      flex-direction: column;
+      flex: 1;
+      overflow: hidden;
+    }
+
+    .settings-header {
+      display: flex;
+      align-items: center;
+      gap: 16px;
+      padding: 14px 32px;
+      border-bottom: 1px solid var(--border);
+      background: #121212;
+      flex-shrink: 0;
+    }
+
+    .settings-back-btn {
+      background: transparent;
+      border: 1px solid var(--border);
+      color: var(--muted);
+      padding: 6px 14px;
+      border-radius: var(--radius);
+      cursor: pointer;
+      font-size: 12px;
+      display: flex; align-items: center; gap: 6px;
+      transition: border-color 0.15s, color 0.15s;
+    }
+    .settings-back-btn:hover { border-color: var(--accent); color: var(--accent); }
+
+    .settings-header-title {
+      font-size: 16px;
+      font-weight: 700;
+      color: var(--text);
+    }
+
+    .settings-body {
+      flex: 1;
+      overflow-y: auto;
+      padding: 36px 48px;
+      display: flex;
+      flex-direction: column;
+      gap: 40px;
+      max-width: 680px;
+    }
+
+    .settings-body::-webkit-scrollbar { width: 5px; }
+    .settings-body::-webkit-scrollbar-track { background: transparent; }
+    .settings-body::-webkit-scrollbar-thumb { background: #2E3A45; border-radius: 99px; }
+
+    .settings-section {
+      display: flex;
+      flex-direction: column;
+      gap: 18px;
+    }
+
+    .settings-section-header {
+      display: flex;
+      flex-direction: column;
+      gap: 5px;
+      padding-bottom: 14px;
+      border-bottom: 1px solid var(--border);
+    }
+
+    .settings-section-title {
+      font-size: 15px;
+      font-weight: 700;
+      color: var(--text);
+    }
+
+    .settings-section-desc {
+      font-size: 13px;
+      color: var(--muted);
+      line-height: 1.6;
+    }
+
+    /* API Key section */
+    .key-badge {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 20px;
+      padding: 5px 12px;
+      font-size: 12px;
+      color: var(--muted);
+    }
+    .key-badge.active { border-color: var(--success); color: var(--success); }
+    .key-badge.missing { border-color: var(--danger); color: var(--danger); }
+    .key-badge-dot { width: 7px; height: 7px; border-radius: 50%; background: currentColor; flex-shrink: 0; }
+
+    .key-input-group {
+      display: flex;
+      flex-direction: column;
+      gap: 10px;
+    }
+
+    .key-input-row {
+      display: flex;
+      gap: 10px;
+      align-items: stretch;
+    }
+
+    .key-input-wrap {
+      flex: 1;
+      position: relative;
+    }
+
+    #api-key-input {
+      width: 100%;
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      color: var(--text);
+      font-size: 14px;
+      padding: 10px 40px 10px 14px;
+      outline: none;
+      font-family: "SF Mono", Consolas, monospace;
+      letter-spacing: 0.3px;
+      transition: border-color 0.2s;
+    }
+    #api-key-input:focus { border-color: var(--accent); }
+    #api-key-input::placeholder { color: var(--muted); font-family: inherit; letter-spacing: 0; }
+
+    #toggle-key-vis {
+      position: absolute;
+      right: 10px;
+      top: 50%;
+      transform: translateY(-50%);
+      background: none;
+      border: none;
+      cursor: pointer;
+      color: var(--muted);
+      display: flex; align-items: center;
+      padding: 4px;
+      transition: color 0.15s;
+    }
+    #toggle-key-vis:hover { color: var(--text); }
+
+    #save-key-btn {
+      background: var(--accent);
+      border: none;
+      border-radius: var(--radius);
+      color: #000;
+      font-size: 13px;
+      font-weight: 600;
+      padding: 0 20px;
+      cursor: pointer;
+      white-space: nowrap;
+      transition: background 0.15s, opacity 0.15s;
+      display: flex; align-items: center; gap: 6px;
+    }
+    #save-key-btn:hover:not(:disabled) { background: var(--accent-dim); }
+    #save-key-btn:disabled { opacity: 0.4; cursor: not-allowed; }
+
+    #key-status {
+      font-size: 12px;
+      min-height: 18px;
+      transition: color 0.2s;
+    }
+    #key-status.ok  { color: var(--success); }
+    #key-status.err { color: var(--danger); }
+
+    /* Document Upload section */
+    #drop-zone {
+      border: 2px dashed var(--border);
+      border-radius: var(--radius);
+      padding: 40px 24px;
+      text-align: center;
+      cursor: pointer;
+      transition: border-color 0.2s, background 0.2s;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 10px;
+      position: relative;
+    }
+    #drop-zone:hover,
+    #drop-zone.drag-over {
+      border-color: var(--accent);
+      background: #1a1a1a;
+    }
+
+    #drop-zone-icon {
+      font-size: 36px;
+      line-height: 1;
+    }
+
+    #drop-zone-label {
+      font-size: 14px;
+      font-weight: 600;
+      color: var(--text);
+    }
+
+    #drop-zone-sub {
+      font-size: 12px;
+      color: var(--muted);
+      line-height: 1.6;
+    }
+
+    #browse-btn {
+      margin-top: 4px;
+      background: transparent;
+      border: 1px solid var(--border);
+      color: var(--accent);
+      border-radius: var(--radius);
+      padding: 7px 18px;
+      font-size: 13px;
+      font-weight: 600;
+      cursor: pointer;
+      transition: border-color 0.15s, background 0.15s;
+    }
+    #browse-btn:hover { border-color: var(--accent); background: #1a1a1a; }
+
+    #doc-file-input { display: none; }
+
+    /* Upload queue */
+    #upload-queue {
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+    }
+
+    .upload-item {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      padding: 10px 14px;
+    }
+
+    .upload-item-icon { font-size: 18px; flex-shrink: 0; }
+
+    .upload-item-info {
+      flex: 1;
+      min-width: 0;
+      display: flex;
+      flex-direction: column;
+      gap: 3px;
+    }
+
+    .upload-item-name {
+      font-size: 13px;
+      font-weight: 600;
+      color: var(--text);
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+
+    .upload-item-status {
+      font-size: 11px;
+      color: var(--muted);
+    }
+    .upload-item-status.ok  { color: var(--success); }
+    .upload-item-status.err { color: var(--danger); }
+
+    .upload-item-spinner {
+      width: 16px; height: 16px;
+      border: 2px solid var(--border);
+      border-top-color: var(--accent);
+      border-radius: 50%;
+      animation: spin 0.8s linear infinite;
+      flex-shrink: 0;
+    }
+    @keyframes spin { to { transform: rotate(360deg); } }
+
+    .upload-item-check {
+      font-size: 16px;
+      flex-shrink: 0;
+    }
+
+    /* Docs list */
+    #docs-list {
+      display: flex;
+      flex-direction: column;
+      gap: 6px;
+    }
+
+    .docs-loading {
+      font-size: 13px;
+      color: var(--muted);
+      padding: 12px 0;
+    }
+
+    .doc-row {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      padding: 10px 14px;
+    }
+
+    .doc-row-icon { font-size: 18px; flex-shrink: 0; }
+
+    .doc-row-info {
+      flex: 1;
+      min-width: 0;
+      display: flex;
+      flex-direction: column;
+      gap: 2px;
+    }
+
+    .doc-row-name {
+      font-size: 13px;
+      font-weight: 600;
+      color: var(--text);
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+
+    .doc-row-meta {
+      font-size: 11px;
+      color: var(--muted);
+    }
+
+    .doc-delete-btn {
+      background: transparent;
+      border: 1px solid transparent;
+      color: var(--muted);
+      width: 28px; height: 28px;
+      border-radius: 7px;
+      cursor: pointer;
+      display: flex; align-items: center; justify-content: center;
+      flex-shrink: 0;
+      transition: border-color 0.15s, color 0.15s, background 0.15s;
+    }
+    .doc-delete-btn:hover { border-color: var(--danger); color: var(--danger); background: #9f191915; }
+    .doc-delete-btn:disabled { opacity: 0.4; cursor: not-allowed; }
+
+    /* ════════════════════════════════════════
+       AUTH OVERLAY (Clerk sign-in)
+    ════════════════════════════════════════ */
+    #auth-overlay {
+      position: fixed;
+      inset: 0;
+      background: var(--bg);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      z-index: 9999;
+    }
+
+    .auth-card {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 20px;
+      width: 100%;
+      max-width: 480px;
+      padding: 0 24px;
+    }
+
+    .auth-logo {
+      width: 68px; height: 68px;
+      border-radius: 16px; object-fit: cover;
+      border: 1px solid #9F191950;
+      box-shadow: 0 0 40px #9F191930;
+    }
+
+    .auth-title {
+      font-size: 24px;
+      font-weight: 700;
+      color: var(--text);
+      text-align: center;
+    }
+
+    .auth-sub {
+      font-size: 14px;
+      color: var(--muted);
+      text-align: center;
+      margin-top: -10px;
+    }
+
+    /* Override Clerk component colours to match dark theme */
+    #clerk-sign-in {
+      width: 100%;
+    }
+
+    /* ── User button in topbars ── */
+    .user-btn-wrap {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+    }
+
+    .user-avatar {
+      width: 32px; height: 32px;
+      border-radius: 50%;
+      background: var(--red-dim);
+      border: 1px solid #9F191960;
+      display: flex; align-items: center; justify-content: center;
+      font-size: 13px; font-weight: 700;
+      color: var(--text);
+      cursor: pointer;
+      overflow: hidden;
+      flex-shrink: 0;
+      transition: border-color 0.15s;
+    }
+    .user-avatar:hover { border-color: var(--accent); }
+    .user-avatar img { width: 100%; height: 100%; object-fit: cover; }
+
+    .signout-btn {
+      background: transparent;
+      border: 1px solid var(--border);
+      color: var(--muted);
+      padding: 5px 12px;
+      border-radius: var(--radius);
+      font-size: 12px;
+      cursor: pointer;
+      transition: border-color 0.15s, color 0.15s;
+    }
+    .signout-btn:hover { border-color: var(--danger); color: var(--danger); }
   </style>
 </head>
 <body>
+<!-- ══ AUTH OVERLAY ══ -->
+<div id="auth-overlay" style="display:none">
+  <div class="auth-card">
+    <img src="logo.png" alt="Affinity" class="auth-logo" />
+    <div class="auth-title">Affinity RAG</div>
+    <div class="auth-sub">Sign in to access your knowledge base</div>
+    <div id="clerk-sign-in"></div>
+  </div>
+</div>
+
 <div id="app">
 
   <!-- ══ LANDING VIEW ══ -->
   <div id="landing">
     <div id="landing-topbar">
-      <div class="topbar-brand">
-        <img src="logo.png" alt="Affinity" class="topbar-logo" />
-        <span class="topbar-name">Affinity RAG</span>
-      </div>
+      <button class="signout-btn" id="landing-signout-btn" style="display:none" onclick="signOut()">Sign out</button>
+      <div style="flex:1"></div>
+      <button class="topbar-settings-btn" onclick="openSettings()" title="Settings">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <circle cx="12" cy="12" r="3"></circle>
+          <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"></path>
+        </svg>
+      </button>
     </div>
 
     <div id="landing-hero">
@@ -410,6 +859,7 @@
   <!-- ══ CHAT VIEW ══ -->
   <div id="chat-view">
     <header>
+      <button class="signout-btn" id="chat-signout-btn" style="display:none" onclick="signOut()">Sign out</button>
       <div class="brand">
         <img src="logo.png" alt="Affinity" class="brand-logo" />
         <div>
@@ -421,6 +871,12 @@
         <button id="new-chat-btn" onclick="resetToLanding()">
           <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="5" x2="12" y2="19"></line><line x1="5" y1="12" x2="19" y2="12"></line></svg>
           New chat
+        </button>
+        <button id="chat-settings-btn" onclick="openSettings()" title="Settings">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <circle cx="12" cy="12" r="3"></circle>
+            <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"></path>
+          </svg>
         </button>
       </div>
     </header>
@@ -438,44 +894,307 @@
     </div>
   </div>
 
+  <!-- ══ SETTINGS VIEW ══ -->
+  <div id="settings-view">
+    <div class="settings-header">
+      <button class="settings-back-btn" onclick="closeSettings()">
+        <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="15 18 9 12 15 6"></polyline></svg>
+        Back
+      </button>
+      <div class="settings-header-title">Settings</div>
+    </div>
+
+    <div class="settings-body">
+
+      <!-- ── API Key ─────────────────────────────── -->
+      <div class="settings-section">
+        <div class="settings-section-header">
+          <div class="settings-section-title">Anthropic API Key</div>
+          <div class="settings-section-desc">Provide your own Anthropic API key. This overrides any default key and is saved locally on your device.</div>
+        </div>
+
+        <div id="key-badge-wrap">
+          <!-- populated by loadSettings() -->
+        </div>
+
+        <div class="key-input-group">
+          <div class="key-input-row">
+            <div class="key-input-wrap">
+              <input type="password" id="api-key-input" placeholder="sk-ant-api03-…" autocomplete="off" spellcheck="false" />
+              <button id="toggle-key-vis" type="button" title="Show / hide key" onclick="toggleKeyVisibility()">
+                <svg id="eye-icon" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                  <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"></path>
+                  <circle cx="12" cy="12" r="3"></circle>
+                </svg>
+              </button>
+            </div>
+            <button id="save-key-btn" onclick="saveApiKey()">
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"></polyline></svg>
+              Save
+            </button>
+          </div>
+          <div id="key-status"></div>
+        </div>
+      </div>
+
+      <!-- ── Document Upload ─────────────────────── -->
+      <div class="settings-section">
+        <div class="settings-section-header">
+          <div class="settings-section-title">Upload Documents</div>
+          <div class="settings-section-desc">
+            Upload files directly into your Google Drive knowledge base. Documents are indexed immediately and become searchable straight away.<br><br>
+            Supported formats: <strong>PDF, Word (.docx), Excel (.xlsx), Plain text (.txt)</strong>
+          </div>
+        </div>
+
+        <div id="drop-zone"
+             onclick="document.getElementById('doc-file-input').click()"
+             ondragover="handleDragOver(event)"
+             ondragleave="handleDragLeave(event)"
+             ondrop="handleDrop(event)">
+          <div id="drop-zone-icon">📂</div>
+          <div id="drop-zone-label">Drop files here</div>
+          <div id="drop-zone-sub">or click to browse from your computer</div>
+          <button id="browse-btn" onclick="event.stopPropagation(); document.getElementById('doc-file-input').click()">Browse files</button>
+          <input type="file" id="doc-file-input" multiple accept=".pdf,.docx,.xlsx,.txt,application/pdf,application/vnd.openxmlformats-officedocument.wordprocessingml.document,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet,text/plain" />
+        </div>
+
+        <div id="upload-queue"></div>
+      </div>
+
+      <!-- ── Knowledge Base ──────────────────────── -->
+      <div class="settings-section">
+        <div class="settings-section-header">
+          <div class="settings-section-title">Knowledge Base</div>
+          <div class="settings-section-desc">All documents currently indexed and searchable in your RAG system.</div>
+        </div>
+        <div id="docs-list">
+          <div class="docs-loading">Loading documents…</div>
+        </div>
+      </div>
+
+    </div>
+  </div>
+
 </div>
 <script>
-// Always use localhost:8000 — works both in Electron and in a regular browser
-const API_BASE = window.navigator.userAgent.includes('Electron')
-  ? 'http://localhost:8000'
-  : 'http://localhost:8000';
-let history = [];
-let isBusy  = false;
+const API_BASE = 'http://localhost:8000';
+let history  = [];
+let isBusy   = false;
+let _prevView = "landing";
+
+// Clerk instance — set after initialisation
+let _clerk = null;
 
 const landingEl      = document.getElementById("landing");
 const chatViewEl     = document.getElementById("chat-view");
+const settingsViewEl = document.getElementById("settings-view");
+const authOverlayEl  = document.getElementById("auth-overlay");
 const messagesEl     = document.getElementById("messages");
 const inputEl        = document.getElementById("user-input");
 const sendBtn        = document.getElementById("send-btn");
 const landingInputEl = document.getElementById("landing-user-input");
 const landingSendBtn = document.getElementById("landing-send-btn");
 
+// ── Auth helpers ───────────────────────────────────────────────────────────
+
+async function getAuthHeaders() {
+  if (!_clerk || !_clerk.session) return {};
+  try {
+    const token = await _clerk.session.getToken();
+    return token ? { "Authorization": `Bearer ${token}` } : {};
+  } catch (_) { return {}; }
+}
+
+async function authFetch(url, options = {}) {
+  const authH  = await getAuthHeaders();
+  const merged = {
+    ...options,
+    headers: { ...(options.headers || {}), ...authH },
+  };
+  return fetch(url, merged);
+}
+
+function _setUserUI(user) {
+  ["landing-signout-btn", "chat-signout-btn"].forEach(id => {
+    const el = document.getElementById(id);
+    if (el) el.style.display = user ? "inline-flex" : "none";
+  });
+}
+
+async function signOut() {
+  if (_clerk) await _clerk.signOut();
+  _setUserUI(null);
+  authOverlayEl.style.display = "flex";
+  landingEl.style.display     = "none";
+  chatViewEl.style.display    = "none";
+  settingsViewEl.style.display = "none";
+  // Re-mount sign-in component
+  _clerk.mountSignIn(document.getElementById("clerk-sign-in"));
+}
+
+// ── Clerk initialisation ───────────────────────────────────────────────────
+
+function _showAuthError(msg) {
+  const el = document.getElementById("clerk-sign-in");
+  if (el) el.innerHTML = `<div style="color:#f85149;font-size:13px;text-align:center;padding:16px;background:#1a1a1a;border:1px solid #f8514940;border-radius:12px;margin-top:8px;">${msg}</div>`;
+}
+
+function _clerkCdnUrl(publishableKey) {
+  // Derive the Clerk frontend API host from the publishable key
+  // pk_test_BASE64 → base64 decodes to "instance.clerk.accounts.dev$"
+  try {
+    const b64  = publishableKey.replace(/^pk_(test|live)_/, "");
+    const host = atob(b64).replace(/\$$/, "");
+    return `https://${host}/npm/@clerk/clerk-js@4/dist/clerk.browser.js`;
+  } catch (_) {
+    return null;
+  }
+}
+
+function _loadClerkScript(publishableKey) {
+  return new Promise((resolve, reject) => {
+    const cdnUrl = _clerkCdnUrl(publishableKey);
+    if (!cdnUrl) {
+      reject(new Error("Could not derive Clerk CDN URL from publishable key"));
+      return;
+    }
+
+    const script = document.createElement("script");
+    // Load from the Clerk CDN so that webpack's public path points there
+    // (the bundle lazy-loads component chunks relative to its own src URL)
+    script.src = cdnUrl;
+    script.setAttribute("data-clerk-publishable-key", publishableKey);
+    script.onload  = resolve;
+    script.onerror = () => reject(new Error(`Failed to load Clerk SDK from ${cdnUrl}`));
+    document.head.appendChild(script);
+  });
+}
+
+async function initClerk() {
+  let publishableKey = null;
+  try {
+    const res  = await fetch(`${API_BASE}/clerk-config`);
+    const data = await res.json();
+    publishableKey = data.publishable_key;
+  } catch (e) {
+    _showAuthError(`Could not reach backend: ${e.message}`);
+    return;
+  }
+
+  if (!publishableKey) {
+    // No Clerk configured — single-user dev mode
+    authOverlayEl.style.display = "none";
+    landingEl.style.display     = "flex";
+    landingInputEl.focus();
+    return;
+  }
+
+  // Dynamically inject the script with the publishable key as attribute
+  // (the bundle reads data-clerk-publishable-key and sets window.Clerk as an instance)
+  try {
+    await _loadClerkScript(publishableKey);
+  } catch (e) {
+    _showAuthError(`Clerk SDK failed to load: ${e.message}`);
+    return;
+  }
+
+  _clerk = window.Clerk;
+  if (!_clerk) {
+    _showAuthError("Clerk SDK loaded but window.Clerk is not defined.");
+    return;
+  }
+
+  try {
+    await _clerk.load({
+      appearance: {
+        variables: {
+          colorPrimary:         "#C6A75E",
+          colorBackground:      "#1a1a1a",
+          colorText:            "#F5F5F5",
+          colorTextSecondary:   "#8a8a8a",
+          colorInputBackground: "#121212",
+          colorInputText:       "#F5F5F5",
+          colorNeutral:         "#2E3A45",
+          borderRadius:         "12px",
+          fontFamily:           "-apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif",
+        },
+      },
+    });
+  } catch (e) {
+    _showAuthError(`Clerk init failed: ${e.message}`);
+    return;
+  }
+
+  if (_clerk.user) {
+    authOverlayEl.style.display = "none";
+    landingEl.style.display     = "flex";
+    _setUserUI(_clerk.user);
+    landingInputEl.focus();
+  } else {
+    authOverlayEl.style.display = "flex";
+    try {
+      _clerk.mountSignIn(document.getElementById("clerk-sign-in"));
+    } catch (e) {
+      _showAuthError(`Sign-in component failed: ${e.message}`);
+      return;
+    }
+
+    _clerk.addListener(({ user }) => {
+      if (user) {
+        authOverlayEl.style.display = "none";
+        landingEl.style.display     = "flex";
+        _setUserUI(user);
+        landingInputEl.focus();
+      }
+    });
+  }
+}
+
+// ── View navigation ────────────────────────────────────────────────────────
+
 function scrollBottom() { messagesEl.scrollTop = messagesEl.scrollHeight; }
 
 function switchToChat() {
-  landingEl.style.display  = "none";
-  chatViewEl.style.display = "flex";
+  landingEl.style.display      = "none";
+  chatViewEl.style.display     = "flex";
+  settingsViewEl.style.display = "none";
 }
 
 function resetToLanding() {
   history = [];
   messagesEl.innerHTML = "";
-  landingEl.style.display  = "flex";
-  chatViewEl.style.display = "none";
+  landingEl.style.display      = "flex";
+  chatViewEl.style.display     = "none";
+  settingsViewEl.style.display = "none";
   landingInputEl.value = "";
   autoResizeLanding();
   landingInputEl.focus();
 }
 
+function openSettings() {
+  _prevView = chatViewEl.style.display === "flex" ? "chat" : "landing";
+  landingEl.style.display      = "none";
+  chatViewEl.style.display     = "none";
+  settingsViewEl.style.display = "flex";
+  loadSettings();
+}
+
+function closeSettings() {
+  settingsViewEl.style.display = "none";
+  if (_prevView === "chat") {
+    chatViewEl.style.display = "flex";
+    inputEl.focus();
+  } else {
+    landingEl.style.display = "flex";
+    landingInputEl.focus();
+  }
+}
+
 function setInputBusy(busy) {
   isBusy = busy;
-  sendBtn.disabled = busy;
-  inputEl.disabled = busy;
+  sendBtn.disabled        = busy;
+  inputEl.disabled        = busy;
   landingSendBtn.disabled = busy;
   landingInputEl.disabled = busy;
 }
@@ -498,8 +1217,7 @@ function getDisplayName(s) {
 }
 
 function submitSuggestion(card) {
-  const title = card.querySelector(".suggestion-title").textContent;
-  startChat(title);
+  startChat(card.querySelector(".suggestion-title").textContent);
 }
 
 function startChat(text) {
@@ -508,27 +1226,254 @@ function startChat(text) {
   setTimeout(() => sendMessage(text), 50);
 }
 
-function createBubble(role, html) {
-  const row = document.createElement("div");
-  row.className = `msg-row ${role}`;
+// ── Settings: API Key ──────────────────────────────────────────────────────
 
-  const avatar = document.createElement("div");
-  avatar.className = `avatar ${role}`;
+async function loadDocuments() {
+  const docsList = document.getElementById("docs-list");
+  if (!docsList) return;
+  docsList.innerHTML = `<div class="docs-loading">Loading documents…</div>`;
+  try {
+    const res  = await authFetch(`${API_BASE}/documents`);
+    const data = await res.json();
+    if (!data.documents || data.documents.length === 0) {
+      docsList.innerHTML = `<div class="docs-loading">No documents indexed yet.</div>`;
+      return;
+    }
+    docsList.innerHTML = "";
+    const iconByType = { pdf: "📄", docx: "📝", xlsx: "📊", txt: "📃" };
+    for (const doc of data.documents) {
+      const ext    = (doc.file_name || "").split(".").pop().toLowerCase();
+      const icon   = iconByType[ext] || "📎";
+      const date   = doc.ingested_at
+        ? new Date(doc.ingested_at).toLocaleDateString(undefined, { year: "numeric", month: "short", day: "numeric" })
+        : "";
+      const isUpload = doc.source === "upload";
+      const sourceBadge = isUpload
+        ? `<span style="background:#1e2830;border:1px solid var(--accent);color:var(--accent);font-size:10px;padding:1px 7px;border-radius:20px;flex-shrink:0;">Uploaded</span>`
+        : `<span style="background:#1a1a1a;border:1px solid var(--border);color:var(--muted);font-size:10px;padding:1px 7px;border-radius:20px;flex-shrink:0;">Drive</span>`;
+      const row = document.createElement("div");
+      row.className = "doc-row";
+      row.innerHTML = `
+        <div class="doc-row-icon">${icon}</div>
+        <div class="doc-row-info">
+          <div class="doc-row-name">${doc.file_name}</div>
+          ${date ? `<div class="doc-row-meta">Indexed ${date}</div>` : ""}
+        </div>
+        ${sourceBadge}
+        <button class="doc-delete-btn" title="Remove from knowledge base" data-file-id="${doc.file_id}" data-file-name="${doc.file_name}">
+          <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <polyline points="3 6 5 6 21 6"></polyline>
+            <path d="M19 6l-1 14H6L5 6"></path>
+            <path d="M10 11v6"></path><path d="M14 11v6"></path>
+            <path d="M9 6V4h6v2"></path>
+          </svg>
+        </button>`;
+      row.querySelector(".doc-delete-btn").addEventListener("click", () => deleteDocument(doc.file_id, doc.file_name, row));
+      docsList.appendChild(row);
+    }
+  } catch (e) {
+    docsList.innerHTML = `<div class="docs-loading" style="color:var(--danger)">Could not load documents: ${e.message}</div>`;
+  }
+}
+
+async function deleteDocument(fileId, fileName, rowEl) {
+  if (!confirm(`Remove "${fileName}" from the knowledge base?\n\nThis only removes it from search — it won't delete the file from Google Drive.`)) return;
+
+  const btn = rowEl.querySelector(".doc-delete-btn");
+  btn.disabled = true;
+
+  try {
+    const res = await authFetch(`${API_BASE}/documents/${encodeURIComponent(fileId)}`, { method: "DELETE" });
+    if (!res.ok) {
+      const err = await res.json().catch(() => ({}));
+      alert(`Failed to remove: ${err.detail || res.statusText}`);
+      btn.disabled = false;
+      return;
+    }
+    // Fade out and remove the row
+    rowEl.style.transition = "opacity 0.2s";
+    rowEl.style.opacity = "0";
+    setTimeout(() => rowEl.remove(), 200);
+  } catch (e) {
+    alert(`Error: ${e.message}`);
+    btn.disabled = false;
+  }
+}
+
+async function loadSettings() {
+  // API key status
+  const wrap = document.getElementById("key-badge-wrap");
+  wrap.innerHTML = "";
+  try {
+    const res  = await authFetch(`${API_BASE}/settings`);
+    const data = await res.json();
+    const badge = document.createElement("div");
+    badge.className = `key-badge ${data.api_key_set ? "active" : "missing"}`;
+    const dot   = document.createElement("div");  dot.className = "key-badge-dot";
+    const label = document.createElement("span");
+    label.textContent = data.api_key_set
+      ? `Key active — ${data.api_key_preview}  (${data.api_key_source})`
+      : "No API key saved yet — enter one below";
+    badge.appendChild(dot);
+    badge.appendChild(label);
+    wrap.appendChild(badge);
+  } catch (_) {
+    wrap.innerHTML = `<div class="key-badge missing"><div class="key-badge-dot"></div><span>Could not reach backend</span></div>`;
+  }
+  loadDocuments();
+}
+
+function toggleKeyVisibility() {
+  const input = document.getElementById("api-key-input");
+  const icon  = document.getElementById("eye-icon");
+  if (input.type === "password") {
+    input.type = "text";
+    icon.innerHTML = `<path d="M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19m-6.72-1.07a3 3 0 1 1-4.24-4.24"></path><line x1="1" y1="1" x2="23" y2="23"></line>`;
+  } else {
+    input.type = "password";
+    icon.innerHTML = `<path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"></path><circle cx="12" cy="12" r="3"></circle>`;
+  }
+}
+
+async function saveApiKey() {
+  const input  = document.getElementById("api-key-input");
+  const btn    = document.getElementById("save-key-btn");
+  const status = document.getElementById("key-status");
+  const key    = input.value.trim();
+
+  if (!key) { status.textContent = "Please enter an API key."; status.className = "err"; return; }
+
+  btn.disabled = true;
+  status.className = "";
+  status.textContent = "Saving…";
+
+  try {
+    const res  = await authFetch(`${API_BASE}/settings/api-key`, {
+      method:  "POST",
+      headers: { "Content-Type": "application/json" },
+      body:    JSON.stringify({ api_key: key }),
+    });
+    const data = await res.json();
+
+    if (!res.ok) {
+      status.textContent = data.detail || "Failed to save key.";
+      status.className   = "err";
+    } else {
+      status.textContent = `Saved — ${data.preview}`;
+      status.className   = "ok";
+      input.value = "";
+      input.type  = "password";
+      document.getElementById("eye-icon").innerHTML =
+        `<path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"></path><circle cx="12" cy="12" r="3"></circle>`;
+      loadSettings();
+    }
+  } catch (err) {
+    status.textContent = `Error: ${err.message}`;
+    status.className   = "err";
+  } finally {
+    btn.disabled = false;
+  }
+}
+
+// ── Settings: Document Upload ──────────────────────────────────────────────
+
+function fileIcon(name) {
+  const ext = name.split(".").pop().toLowerCase();
+  if (ext === "pdf")  return "📄";
+  if (ext === "docx") return "📝";
+  if (ext === "xlsx") return "📊";
+  return "📃";
+}
+
+function handleDragOver(e)  { e.preventDefault(); document.getElementById("drop-zone").classList.add("drag-over"); }
+function handleDragLeave(e) { document.getElementById("drop-zone").classList.remove("drag-over"); }
+function handleDrop(e) {
+  e.preventDefault();
+  document.getElementById("drop-zone").classList.remove("drag-over");
+  const files = Array.from(e.dataTransfer.files);
+  if (files.length) uploadFiles(files);
+}
+
+document.getElementById("doc-file-input").addEventListener("change", function () {
+  const files = Array.from(this.files);
+  if (files.length) uploadFiles(files);
+  this.value = "";
+});
+
+async function uploadFiles(files) {
+  const queue = document.getElementById("upload-queue");
+
+  for (const file of files) {
+    const item = document.createElement("div");
+    item.className = "upload-item";
+    item.innerHTML = `
+      <div class="upload-item-icon">${fileIcon(file.name)}</div>
+      <div class="upload-item-info">
+        <div class="upload-item-name">${file.name}</div>
+        <div class="upload-item-status">Uploading…</div>
+      </div>
+      <div class="upload-item-spinner"></div>
+    `;
+    queue.prepend(item);
+
+    const statusEl  = item.querySelector(".upload-item-status");
+    const spinnerEl = item.querySelector(".upload-item-spinner");
+
+    try {
+      const formData = new FormData();
+      formData.append("file", file, file.name);
+
+      const res  = await authFetch(`${API_BASE}/upload`, { method: "POST", body: formData });
+      const data = await res.json();
+
+      spinnerEl.remove();
+      const mark = document.createElement("div");
+      mark.className = "upload-item-check";
+      if (res.ok) {
+        mark.textContent = "✓"; mark.style.color = "var(--success)";
+        statusEl.textContent = data.warning ? "Uploaded (indexed at next poll)" : "Uploaded & indexed";
+        statusEl.className   = "upload-item-status ok";
+        // Refresh the knowledge base list so the new file appears immediately
+        loadDocuments();
+      } else {
+        mark.textContent = "✗"; mark.style.color = "var(--danger)";
+        statusEl.textContent = data.detail || "Upload failed";
+        statusEl.className   = "upload-item-status err";
+      }
+      item.appendChild(mark);
+    } catch (err) {
+      spinnerEl.remove();
+      const mark = document.createElement("div");
+      mark.className = "upload-item-check";
+      mark.textContent = "✗"; mark.style.color = "var(--danger)";
+      item.appendChild(mark);
+      statusEl.textContent = `Error: ${err.message}`;
+      statusEl.className   = "upload-item-status err";
+    }
+  }
+}
+
+// ── Chat ───────────────────────────────────────────────────────────────────
+
+function createBubble(role, html) {
+  const row    = document.createElement("div"); row.className = `msg-row ${role}`;
+  const avatar = document.createElement("div"); avatar.className = `avatar ${role}`;
+
   if (role === "bot") {
-    const img = document.createElement("img");
-    img.src = "logo.png"; img.alt = "A";
+    const img = document.createElement("img"); img.src = "logo.png"; img.alt = "A";
     avatar.appendChild(img);
   } else {
-    avatar.textContent = "U";
+    // Use the first letter of the signed-in user's name if available
+    const u = _clerk?.user;
+    avatar.textContent = u?.firstName?.[0] || u?.emailAddresses?.[0]?.emailAddress?.[0]?.toUpperCase() || "U";
+    if (u?.imageUrl) {
+      avatar.innerHTML = `<img src="${u.imageUrl}" alt="U" style="width:100%;height:100%;object-fit:cover;border-radius:50%;" />`;
+    }
   }
 
-  const wrap = document.createElement("div");
-  wrap.className = "bubble-wrap";
-
-  const bubble = document.createElement("div");
-  bubble.className = `bubble ${role}`;
-  if (role === "bot") bubble.innerHTML = html;
-  else bubble.textContent = html;
+  const wrap   = document.createElement("div"); wrap.className = "bubble-wrap";
+  const bubble = document.createElement("div"); bubble.className = `bubble ${role}`;
+  if (role === "bot") bubble.innerHTML = html; else bubble.textContent = html;
 
   wrap.appendChild(bubble);
   row.appendChild(avatar);
@@ -540,100 +1485,69 @@ function createBubble(role, html) {
 
 function renderSources(wrap, sources) {
   if (!sources || sources.length === 0) return;
-
   const seen = new Set();
-  const unique = sources.filter(s => {
-    const name = getDisplayName(s);
-    if (seen.has(name)) return false;
-    seen.add(name); return true;
-  });
+  const unique = sources.filter(s => { const n = getDisplayName(s); if (seen.has(n)) return false; seen.add(n); return true; });
 
   const bubble = wrap.querySelector(".bubble.bot");
   if (bubble) {
-    const cited = document.createElement("div");
-    cited.className = "cited-sources";
-    const label = document.createElement("div");
-    label.className = "cited-sources-label";
-    label.textContent = "Sources used in this answer";
-    cited.appendChild(label);
-    const list = document.createElement("div");
-    list.className = "cited-list";
+    const cited = document.createElement("div"); cited.className = "cited-sources";
+    const lbl   = document.createElement("div"); lbl.className = "cited-sources-label"; lbl.textContent = "Sources used in this answer";
+    cited.appendChild(lbl);
+    const list = document.createElement("div"); list.className = "cited-list";
     sources.forEach(s => {
-      const item = document.createElement("div"); item.className = "cited-item";
-      const icon = document.createElement("span"); icon.className = "cited-icon"; icon.textContent = s.source === "graph" ? "🕸" : "📄";
-      const info = document.createElement("div"); info.className = "cited-info";
+      const item  = document.createElement("div"); item.className = "cited-item";
+      const icon  = document.createElement("span"); icon.className = "cited-icon"; icon.textContent = s.source === "graph" ? "🕸" : "📄";
+      const info  = document.createElement("div"); info.className = "cited-info";
       const fname = document.createElement("div"); fname.className = "cited-filename"; fname.textContent = getDisplayName(s);
-      const preview = document.createElement("div"); preview.className = "cited-preview"; preview.textContent = s.chunk_preview || "";
-      info.appendChild(fname);
-      if (s.chunk_preview) info.appendChild(preview);
+      const prev  = document.createElement("div"); prev.className = "cited-preview"; prev.textContent = s.chunk_preview || "";
+      info.appendChild(fname); if (s.chunk_preview) info.appendChild(prev);
       item.appendChild(icon); item.appendChild(info); list.appendChild(item);
     });
-    cited.appendChild(list);
-    bubble.appendChild(cited);
+    cited.appendChild(list); bubble.appendChild(cited);
   }
 
-  const filesBox = document.createElement("div"); filesBox.className = "files-searched";
+  const box    = document.createElement("div"); box.className = "files-searched";
   const flabel = document.createElement("div"); flabel.className = "files-searched-label";
   flabel.innerHTML = `🗂 FILES SEARCHED &nbsp;<span>${unique.length} of 15</span>`;
-  filesBox.appendChild(flabel);
-  const pillList = document.createElement("div"); pillList.className = "files-pill-list";
-  unique.forEach(s => {
-    const pill = document.createElement("span"); pill.className = "file-pill"; pill.textContent = getDisplayName(s);
-    pillList.appendChild(pill);
-  });
-  filesBox.appendChild(pillList);
-  wrap.appendChild(filesBox);
+  box.appendChild(flabel);
+  const pills = document.createElement("div"); pills.className = "files-pill-list";
+  unique.forEach(s => { const p = document.createElement("span"); p.className = "file-pill"; p.textContent = getDisplayName(s); pills.appendChild(p); });
+  box.appendChild(pills); wrap.appendChild(box);
   scrollBottom();
 }
 
 function addTypingIndicator() {
   const row = document.createElement("div"); row.className = "msg-row bot"; row.id = "typing-row";
-  const avatar = document.createElement("div"); avatar.className = "avatar bot";
-  const img = document.createElement("img"); img.src = "logo.png"; img.alt = "A";
-  avatar.appendChild(img);
-  const wrap = document.createElement("div"); wrap.className = "bubble-wrap";
+  const av  = document.createElement("div"); av.className = "avatar bot";
+  const img = document.createElement("img"); img.src = "logo.png"; img.alt = "A"; av.appendChild(img);
+  const wrap   = document.createElement("div"); wrap.className = "bubble-wrap";
   const bubble = document.createElement("div"); bubble.className = "bubble bot typing";
   bubble.innerHTML = '<span class="dot"></span><span class="dot"></span><span class="dot"></span>';
-  wrap.appendChild(bubble); row.appendChild(avatar); row.appendChild(wrap);
+  wrap.appendChild(bubble); row.appendChild(av); row.appendChild(wrap);
   messagesEl.appendChild(row); scrollBottom();
   return row;
 }
 
-function removeTypingIndicator() {
-  const el = document.getElementById("typing-row");
-  if (el) el.remove();
-}
+function removeTypingIndicator() { const el = document.getElementById("typing-row"); if (el) el.remove(); }
 
 function isDocumentListQuery(text) {
   const t = text.toLowerCase();
-  return (
-    (t.includes("what") || t.includes("list") || t.includes("show") || t.includes("which")) &&
-    (t.includes("file") || t.includes("document") || t.includes("doc") || t.includes("access") || t.includes("know about") || t.includes("ingested"))
-  );
+  return (t.includes("what") || t.includes("list") || t.includes("show") || t.includes("which")) &&
+         (t.includes("file") || t.includes("document") || t.includes("doc") || t.includes("access") || t.includes("know about") || t.includes("ingested"));
 }
 
-async function handleDocumentList(text) {
+async function handleDocumentList() {
   removeTypingIndicator();
   try {
-    const res = await fetch(`${API_BASE}/documents`);
+    const res  = await authFetch(`${API_BASE}/documents`);
     const data = await res.json();
     const docs = data.documents || [];
-
-    if (docs.length === 0) {
-      const { bubble } = createBubble("bot", "");
-      bubble.innerHTML = marked.parse("I don't have any documents ingested yet. The system will automatically pull from Google Drive — please check back in a few minutes.");
-      history.push({ role: "assistant", content: "No documents ingested yet." });
-      return;
-    }
-
-    let md = `I have access to **${docs.length} document${docs.length !== 1 ? "s" : ""}** in my knowledge base:\n\n`;
-    docs.forEach((d, i) => {
-      const modified = d.modified_time ? ` — last modified ${d.modified_time.split("T")[0]}` : "";
-      md += `${i + 1}. **${d.file_name}**${modified}\n`;
-    });
-    md += `\nFeel free to ask me anything about any of these documents!`;
-
-    const { bubble, wrap } = createBubble("bot", "");
+    let md = docs.length === 0
+      ? "I don't have any documents ingested yet. The system will automatically pull from Google Drive — please check back in a few minutes."
+      : `I have access to **${docs.length} document${docs.length !== 1 ? "s" : ""}** in my knowledge base:\n\n` +
+        docs.map((d, i) => `${i + 1}. **${d.file_name}**${d.modified_time ? ` — last modified ${d.modified_time.split("T")[0]}` : ""}`).join("\n") +
+        "\n\nFeel free to ask me anything about any of these documents!";
+    const { bubble } = createBubble("bot", "");
     bubble.innerHTML = marked.parse(md);
     scrollBottom();
     history.push({ role: "assistant", content: md });
@@ -641,8 +1555,7 @@ async function handleDocumentList(text) {
     const { bubble } = createBubble("bot", "");
     bubble.innerHTML = `<span style="color:var(--danger)">Error fetching document list: ${err.message}</span>`;
   } finally {
-    setInputBusy(false);
-    inputEl.focus();
+    setInputBusy(false); inputEl.focus();
   }
 }
 
@@ -652,21 +1565,17 @@ async function sendMessage(forcedText) {
 
   if (!forcedText) { inputEl.value = ""; autoResize(); }
   setInputBusy(true);
-
   createBubble("user", text);
   history.push({ role: "user", content: text });
   addTypingIndicator();
 
-  // Short-circuit: if asking about available files, hit /documents directly
-  if (isDocumentListQuery(text)) {
-    return handleDocumentList(text);
-  }
+  if (isDocumentListQuery(text)) return handleDocumentList();
 
   try {
-    const res = await fetch(`${API_BASE}/chat`, {
-      method: "POST",
+    const res = await authFetch(`${API_BASE}/chat`, {
+      method:  "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ message: text, history: history.slice(0, -1), stream: true }),
+      body:    JSON.stringify({ message: text, history: history.slice(0, -1), stream: true }),
     });
 
     if (!res.ok) {
@@ -676,28 +1585,27 @@ async function sendMessage(forcedText) {
 
     removeTypingIndicator();
     const { bubble, wrap } = createBubble("bot", "");
-    let fullText = ""; let sources = []; let lastLineWasSourcesEvent = false;
-    const reader = res.body.getReader(); const decoder = new TextDecoder(); let buffer = "";
+    let fullText = "", sources = [], lastWasSources = false;
+    const reader = res.body.getReader(), decoder = new TextDecoder();
+    let buffer = "";
 
     while (true) {
       const { done, value } = await reader.read();
       if (done) break;
       buffer += decoder.decode(value, { stream: true });
       const lines = buffer.split("\n"); buffer = lines.pop();
-
       for (const line of lines) {
-        if (line.startsWith("event: sources")) { lastLineWasSourcesEvent = true; continue; }
+        if (line.startsWith("event: sources")) { lastWasSources = true; continue; }
         if (line.startsWith("data: ")) {
           const payload = line.slice(6);
-          if (lastLineWasSourcesEvent || payload.startsWith("[")) {
-            lastLineWasSourcesEvent = false;
+          if (lastWasSources || payload.startsWith("[{")) {
+            lastWasSources = false;
             try { sources = JSON.parse(payload); renderSources(wrap, sources); } catch (_) {}
             continue;
           }
           if (payload === "[DONE]") break;
           if (payload.startsWith("[ERROR]")) { bubble.textContent = payload.replace("[ERROR] ", ""); break; }
-          const chunk = payload.replace(/\\n/g, "\n");
-          fullText += chunk;
+          fullText += payload.replace(/\\n/g, "\n");
           bubble.innerHTML = marked.parse(fullText);
           scrollBottom();
         }
@@ -709,13 +1617,12 @@ async function sendMessage(forcedText) {
     removeTypingIndicator();
     createBubble("bot", `<span style="color:var(--danger)">Error: ${err.message}</span>`);
   } finally {
-    setInputBusy(false);
-    inputEl.focus();
+    setInputBusy(false); inputEl.focus();
   }
 }
 
+// ── Event listeners ────────────────────────────────────────────────────────
 
-// Event listeners
 sendBtn.addEventListener("click", () => sendMessage());
 inputEl.addEventListener("keydown", e => { if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); sendMessage(); } });
 inputEl.addEventListener("input", autoResize);
@@ -724,7 +1631,15 @@ landingSendBtn.addEventListener("click", () => startChat(landingInputEl.value.tr
 landingInputEl.addEventListener("keydown", e => { if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); startChat(landingInputEl.value.trim()); } });
 landingInputEl.addEventListener("input", autoResizeLanding);
 
-landingInputEl.focus();
+document.getElementById("api-key-input").addEventListener("keydown", e => { if (e.key === "Enter") saveApiKey(); });
+
+// ── Boot ───────────────────────────────────────────────────────────────────
+
+// Show auth overlay by default; initClerk will hide it once state is known
+authOverlayEl.style.display = "flex";
+landingEl.style.display     = "none";
+
+initClerk();
 </script>
 </body>
 </html>
