@@ -4,7 +4,8 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>Affinity RAG</title>
-  <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/marked@14.1.3/marked.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/dompurify@3.2.3/dist/purify.min.js"></script>
   <!-- Clerk JS is injected dynamically by initClerk() with data-clerk-publishable-key -->
   <style>
     *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
@@ -1228,6 +1229,12 @@ function startChat(text) {
 
 // ── Settings: API Key ──────────────────────────────────────────────────────
 
+function esc(str) {
+  const d = document.createElement("div");
+  d.textContent = String(str);
+  return d.innerHTML;
+}
+
 async function loadDocuments() {
   const docsList = document.getElementById("docs-list");
   if (!docsList) return;
@@ -1256,11 +1263,11 @@ async function loadDocuments() {
       row.innerHTML = `
         <div class="doc-row-icon">${icon}</div>
         <div class="doc-row-info">
-          <div class="doc-row-name">${doc.file_name}</div>
-          ${date ? `<div class="doc-row-meta">Indexed ${date}</div>` : ""}
+          <div class="doc-row-name">${esc(doc.file_name)}</div>
+          ${date ? `<div class="doc-row-meta">Indexed ${esc(date)}</div>` : ""}
         </div>
         ${sourceBadge}
-        <button class="doc-delete-btn" title="Remove from knowledge base" data-file-id="${doc.file_id}" data-file-name="${doc.file_name}">
+        <button class="doc-delete-btn" title="Remove from knowledge base" data-file-id="${esc(doc.file_id)}" data-file-name="${esc(doc.file_name)}">
           <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
             <polyline points="3 6 5 6 21 6"></polyline>
             <path d="M19 6l-1 14H6L5 6"></path>
@@ -1548,12 +1555,12 @@ async function handleDocumentList() {
         docs.map((d, i) => `${i + 1}. **${d.file_name}**${d.modified_time ? ` — last modified ${d.modified_time.split("T")[0]}` : ""}`).join("\n") +
         "\n\nFeel free to ask me anything about any of these documents!";
     const { bubble } = createBubble("bot", "");
-    bubble.innerHTML = marked.parse(md);
+    bubble.innerHTML = DOMPurify.sanitize(marked.parse(md));
     scrollBottom();
     history.push({ role: "assistant", content: md });
   } catch (err) {
     const { bubble } = createBubble("bot", "");
-    bubble.innerHTML = `<span style="color:var(--danger)">Error fetching document list: ${err.message}</span>`;
+    bubble.innerHTML = `<span style="color:var(--danger)">Error fetching document list: ${esc(err.message)}</span>`;
   } finally {
     setInputBusy(false); inputEl.focus();
   }
@@ -1606,7 +1613,7 @@ async function sendMessage(forcedText) {
           if (payload === "[DONE]") break;
           if (payload.startsWith("[ERROR]")) { bubble.textContent = payload.replace("[ERROR] ", ""); break; }
           fullText += payload.replace(/\\n/g, "\n");
-          bubble.innerHTML = marked.parse(fullText);
+          bubble.innerHTML = DOMPurify.sanitize(marked.parse(fullText));
           scrollBottom();
         }
       }

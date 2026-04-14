@@ -257,14 +257,17 @@ def chat(user_message: str, history: list[dict], api_key: str | None = None) -> 
 
 def chat_stream(user_message: str, history: list[dict], api_key: str | None = None):
     """Generator that yields SSE-formatted chunks, then a final sources event."""
+    import logging as _logging
     try:
         client  = _resolve_client(api_key)
         matches = hybrid_retrieve(user_message)
     except ValueError as e:
+        # ValueError from _resolve_client is a user-facing config message — safe to show
         yield f"data: [ERROR] {e}\n\n"
         return
     except Exception as e:
-        yield f"data: [ERROR] Retrieval error: {e}\n\n"
+        _logging.getLogger(__name__).exception("Retrieval error in chat_stream")
+        yield "data: [ERROR] An internal error occurred. Please try again.\n\n"
         return
 
     system_content, messages = build_anthropic_messages(user_message, matches, history)
@@ -281,7 +284,9 @@ def chat_stream(user_message: str, history: list[dict], api_key: str | None = No
             for text in stream.text_stream:
                 yield f"data: {text.replace(chr(10), chr(92) + 'n')}\n\n"
     except Exception as e:
-        yield f"data: [ERROR] {e}\n\n"
+        import logging as _logging
+        _logging.getLogger(__name__).exception("Streaming error in chat_stream")
+        yield "data: [ERROR] An internal error occurred. Please try again.\n\n"
         return
 
     yield f"event: sources\ndata: {json.dumps(_build_sources(matches))}\n\n"

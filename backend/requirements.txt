@@ -16,3 +16,4 @@ networkx
 spacy
 PyJWT[crypto]>=2.8.0
 python-multipart>=0.0.9
+slowapi>=0.1.9

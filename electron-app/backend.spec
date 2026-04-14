@@ -71,6 +71,13 @@ a = Analysis(
         'googleapiclient.http',
         'google.auth',
         'google.auth.transport.requests',
+        # Rate limiting
+        'slowapi',
+        'slowapi.util',
+        'slowapi.errors',
+        'limits',
+        'limits.storage',
+        'limits.strategies',
         # Auth / Clerk
         'jwt',
         'jwt.algorithms',
