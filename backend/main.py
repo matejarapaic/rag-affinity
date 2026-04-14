@@ -9,7 +9,6 @@ from fastapi.responses import StreamingResponse
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
 from slowapi import Limiter, _rate_limit_exceeded_handler
-from slowapi.util import get_remote_address
 from slowapi.errors import RateLimitExceeded
 import uvicorn
 
@@ -26,7 +25,12 @@ from graph import get_stats, extract_entities, graph_search
 validate_config()
 
 # ── Rate limiting ─────────────────────────────────────────────────────────────
-limiter = Limiter(key_func=get_remote_address, default_limits=["120/minute"])
+# Use only the direct TCP peer address — never X-Forwarded-For — to prevent
+# clients from spoofing a different IP to bypass rate limits.
+def _real_ip(request: Request) -> str:
+    return request.client.host if request.client else "unknown"
+
+limiter = Limiter(key_func=_real_ip, default_limits=["120/minute"])
 
 # ── Background Drive poller ──────────────────────────────────────────────────
 def _start_poller():
@@ -47,10 +51,10 @@ app.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)
 
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],
-    allow_credentials=True,
-    allow_methods=["*"],
-    allow_headers=["*"],
+    allow_origins=["http://localhost:8000"],
+    allow_credentials=False,
+    allow_methods=["GET", "POST", "DELETE"],
+    allow_headers=["Authorization", "Content-Type"],
 )
 
 
@@ -140,7 +144,8 @@ async def chat_endpoint(request: Request, req: ChatRequest, user_id: str = Depen
     except (ValueError, RuntimeError) as e:
         raise HTTPException(status_code=422, detail=str(e))
     except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Unexpected error: {e}")
+        logging.getLogger(__name__).exception("Chat error")
+        raise HTTPException(status_code=500, detail="An internal error occurred")
 
 
 # ── Documents endpoint ────────────────────────────────────────────────────────
@@ -183,7 +188,8 @@ def list_documents(request: Request, user_id: str = Depends(get_user_id)):
         docs = sorted(seen.values(), key=lambda d: d["file_name"].lower())
         return {"count": len(docs), "documents": docs}
     except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
+        logging.getLogger(__name__).exception("Failed to list documents")
+        raise HTTPException(status_code=500, detail="Failed to retrieve documents")
 
 
 @app.delete("/documents/{file_id:path}")
@@ -203,7 +209,8 @@ def delete_document(request: Request, file_id: str, user_id: str = Depends(get_u
         )
         return {"status": "deleted", "file_id": file_id}
     except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
+        logging.getLogger(__name__).exception("Failed to delete document")
+        raise HTTPException(status_code=500, detail="Failed to delete document")
 
 
 # ── Document upload endpoint ──────────────────────────────────────────────────
@@ -238,6 +245,10 @@ async def upload_document(
     if not file_bytes:
         raise HTTPException(status_code=400, detail="Empty file")
 
+    MAX_UPLOAD_BYTES = 50 * 1024 * 1024  # 50 MB
+    if len(file_bytes) > MAX_UPLOAD_BYTES:
+        raise HTTPException(status_code=413, detail="File too large — maximum size is 50 MB")
+
     # Synthesise a file-metadata dict — same shape ingest_bytes() expects
     file_id = "upload_" + hashlib.md5(filename.encode() + file_bytes[:64]).hexdigest()[:12]
     file_meta = {
@@ -251,8 +262,8 @@ async def upload_document(
     try:
         ingest_bytes(file_bytes, file_meta)
     except Exception as e:
-        logging.getLogger(__name__).warning("Ingestion failed: %s", e)
-        raise HTTPException(status_code=500, detail=f"Ingestion failed: {e}")
+        logging.getLogger(__name__).exception("Ingestion failed for %s", filename)
+        raise HTTPException(status_code=500, detail="Ingestion failed — check server logs")
 
     return {
         "status": "success",
@@ -306,6 +317,6 @@ else:
 
 if __name__ == "__main__":
     if getattr(sys, 'frozen', False):
-        uvicorn.run(app, host="0.0.0.0", port=8000, reload=False)
+        uvicorn.run(app, host="127.0.0.1", port=8000, reload=False)
     else:
-        uvicorn.run("main:app", host="0.0.0.0", port=8000, reload=True)
+        uvicorn.run("main:app", host="127.0.0.1", port=8000, reload=True)

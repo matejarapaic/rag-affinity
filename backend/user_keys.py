@@ -26,7 +26,9 @@ def _load() -> dict:
 
 
 def _save(data: dict):
+    import os
     _KEYS_FILE.write_text(json.dumps(data, indent=2))
+    os.chmod(_KEYS_FILE, 0o600)
 
 
 def get_user_key(user_id: str) -> str | None:

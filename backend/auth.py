@@ -17,7 +17,7 @@ from functools import lru_cache
 import httpx
 from fastapi import Header, HTTPException
 
-from config import CLERK_JWKS_URL
+from config import CLERK_JWKS_URL, CLERK_PUBLISHABLE_KEY
 
 log = logging.getLogger(__name__)
 
@@ -56,6 +56,15 @@ def _get_jwk_for_kid(kid: str) -> dict:
 
 # ── Token verification ────────────────────────────────────────────────────────
 
+def _expected_issuer() -> str | None:
+    """Derive the expected JWT issuer from CLERK_JWKS_URL (strip /.well-known/jwks.json)."""
+    if not CLERK_JWKS_URL:
+        return None
+    from urllib.parse import urlparse
+    parsed = urlparse(CLERK_JWKS_URL)
+    return f"{parsed.scheme}://{parsed.netloc}"
+
+
 def _verify_token(token: str) -> dict:
     if not _HAS_JWT:
         raise RuntimeError("PyJWT[crypto] is not installed")
@@ -68,12 +77,16 @@ def _verify_token(token: str) -> dict:
     jwk        = _get_jwk_for_kid(kid)
     public_key = _pyjwt.algorithms.RSAAlgorithm.from_jwk(jwk)
 
-    return _pyjwt.decode(
-        token,
-        public_key,
+    issuer = _expected_issuer()
+    decode_options = {"verify_aud": False}
+    decode_kwargs = dict(
         algorithms=["RS256"],
-        options={"verify_aud": False},   # Clerk omits aud in session tokens
+        options=decode_options,
     )
+    if issuer:
+        decode_kwargs["issuer"] = issuer
+
+    return _pyjwt.decode(token, public_key, **decode_kwargs)
 
 
 # ── FastAPI dependency ────────────────────────────────────────────────────────
@@ -102,7 +115,8 @@ def get_user_id(authorization: str = Header(default=None)) -> str:
     except HTTPException:
         raise
     except Exception as exc:
-        raise HTTPException(status_code=401, detail=f"Invalid token: {exc}") from exc
+        log.warning("Token verification failed: %s", exc)
+        raise HTTPException(status_code=401, detail="Invalid or expired token") from exc
 
     user_id = payload.get("sub")
     if not user_id:

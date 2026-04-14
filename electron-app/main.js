@@ -240,7 +240,7 @@ function createMainWindow() {
     webPreferences: {
       nodeIntegration: false,
       contextIsolation: true,
-      webSecurity: false,
+      sandbox: true,
     },
   });
 
@@ -255,7 +255,10 @@ function createMainWindow() {
   });
 
   mainWindow.webContents.setWindowOpenHandler(({ url }) => {
-    shell.openExternal(url);
+    // Only allow safe external URLs — block file://, smb://, etc.
+    if (/^https?:\/\//i.test(url)) {
+      shell.openExternal(url);
+    }
     return { action: 'deny' };
   });
 
