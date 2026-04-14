@@ -24,6 +24,8 @@ a = Analysis(
         (os.path.join(BACKEND_DIR, '.env'), '.'),
         # Google Drive service account credentials
         (os.path.join(BACKEND_DIR, 'service_account.json'), '.'),
+        # Frontend static files — served by FastAPI at http://localhost:8000
+        (os.path.abspath(os.path.join(SPECPATH, '..', 'frontend')), 'frontend'),
     ],
     hiddenimports=[
         # FastAPI / uvicorn stack
@@ -69,6 +71,14 @@ a = Analysis(
         'googleapiclient.http',
         'google.auth',
         'google.auth.transport.requests',
+        # Auth / Clerk
+        'jwt',
+        'jwt.algorithms',
+        'cryptography',
+        'cryptography.hazmat.primitives.asymmetric.rsa',
+        # File upload
+        'multipart',
+        'python_multipart',
         # Misc
         'email.mime.text',
         'email.mime.multipart',
