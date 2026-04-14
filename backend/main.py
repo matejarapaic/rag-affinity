@@ -3,11 +3,14 @@ import logging
 import threading
 from pathlib import Path
 
-from fastapi import FastAPI, HTTPException, UploadFile, File, Depends
+from fastapi import FastAPI, HTTPException, UploadFile, File, Depends, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import StreamingResponse
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
+from slowapi import Limiter, _rate_limit_exceeded_handler
+from slowapi.util import get_remote_address
+from slowapi.errors import RateLimitExceeded
 import uvicorn
 
 from config import (
@@ -22,6 +25,9 @@ from graph import get_stats, extract_entities, graph_search
 
 validate_config()
 
+# ── Rate limiting ─────────────────────────────────────────────────────────────
+limiter = Limiter(key_func=get_remote_address, default_limits=["120/minute"])
+
 # ── Background Drive poller ──────────────────────────────────────────────────
 def _start_poller():
     try:
@@ -35,6 +41,9 @@ def _start_poller():
 _start_poller()
 
 app = FastAPI(title="Affinity RAG", version="2.0.0")
+
+app.state.limiter = limiter
+app.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)
 
 app.add_middleware(
     CORSMiddleware,
@@ -71,7 +80,8 @@ def health():
 
 
 @app.get("/clerk-config")
-def clerk_config():
+@limiter.limit("5/15minutes")          # login-adjacent: strict limit
+def clerk_config(request: Request):
     """
     Returns the Clerk publishable key so the frontend can initialise the SDK.
     Returns null when Clerk is not configured (single-user dev mode).
@@ -82,7 +92,8 @@ def clerk_config():
 # ── Settings endpoints ────────────────────────────────────────────────────────
 
 @app.get("/settings")
-def get_settings(user_id: str = Depends(get_user_id)):
+@limiter.limit("30/minute")
+def get_settings(request: Request, user_id: str = Depends(get_user_id)):
     """Return the current API key status for the authenticated user."""
     user_key   = get_user_key(user_id)
     active_key = user_key or ANTHROPIC_API_KEY or ""
@@ -95,7 +106,8 @@ def get_settings(user_id: str = Depends(get_user_id)):
 
 
 @app.post("/settings/api-key")
-def save_api_key(req: ApiKeyRequest, user_id: str = Depends(get_user_id)):
+@limiter.limit("5/15minutes")          # login-adjacent: strict limit
+def save_api_key(request: Request, req: ApiKeyRequest, user_id: str = Depends(get_user_id)):
     """Validate and persist the user's Anthropic API key."""
     key = req.api_key.strip()
     if not key.startswith("sk-ant-"):
@@ -110,7 +122,8 @@ def save_api_key(req: ApiKeyRequest, user_id: str = Depends(get_user_id)):
 # ── Chat endpoint ─────────────────────────────────────────────────────────────
 
 @app.post("/chat")
-async def chat_endpoint(req: ChatRequest, user_id: str = Depends(get_user_id)):
+@limiter.limit("30/minute")
+async def chat_endpoint(request: Request, req: ChatRequest, user_id: str = Depends(get_user_id)):
     api_key = get_user_key(user_id) or ANTHROPIC_API_KEY or None
     history = [{"role": m.role, "content": m.content} for m in req.history]
 
@@ -133,7 +146,8 @@ async def chat_endpoint(req: ChatRequest, user_id: str = Depends(get_user_id)):
 # ── Documents endpoint ────────────────────────────────────────────────────────
 
 @app.get("/documents")
-def list_documents(user_id: str = Depends(get_user_id)):
+@limiter.limit("30/minute")
+def list_documents(request: Request, user_id: str = Depends(get_user_id)):
     """Return all unique documents currently in the knowledge base."""
     try:
         from qdrant_client import QdrantClient
@@ -173,7 +187,8 @@ def list_documents(user_id: str = Depends(get_user_id)):
 
 
 @app.delete("/documents/{file_id:path}")
-def delete_document(file_id: str, user_id: str = Depends(get_user_id)):
+@limiter.limit("20/minute")
+def delete_document(request: Request, file_id: str, user_id: str = Depends(get_user_id)):
     """Remove all Qdrant chunks for a given file_id."""
     try:
         from qdrant_client import QdrantClient
@@ -206,7 +221,9 @@ def _sniff_mime(filename: str, reported: str) -> str:
 
 
 @app.post("/upload")
+@limiter.limit("10/minute")
 async def upload_document(
+    request: Request,
     file: UploadFile = File(...),
     user_id: str = Depends(get_user_id),
 ):
@@ -246,12 +263,14 @@ async def upload_document(
 # ── Graph inspection endpoints ────────────────────────────────────────────────
 
 @app.get("/graph/stats")
-def graph_stats(user_id: str = Depends(get_user_id)):
+@limiter.limit("30/minute")
+def graph_stats(request: Request, user_id: str = Depends(get_user_id)):
     return get_stats()
 
 
 @app.post("/graph/debug")
-def graph_debug(req: GraphDebugRequest, user_id: str = Depends(get_user_id)):
+@limiter.limit("30/minute")
+def graph_debug(request: Request, req: GraphDebugRequest, user_id: str = Depends(get_user_id)):
     entities = extract_entities(req.query)
     matches  = graph_search(req.query, top_k=5)
     return {
